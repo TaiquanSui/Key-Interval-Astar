@@ -39,7 +39,7 @@ std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
     std::unordered_map<Vertex, double> closed_list;
 
 
-    auto start_node = std::make_shared<AStarNode>(start, 0, heuristic_octile(start, goal));
+    auto start_node = std::make_shared<AStarNode>(start, 0, heuristic(start, goal));
     open_list.push(start_node);
 
     while (!open_list.empty()) {
@@ -88,13 +88,76 @@ std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
             closed_list[next_pos] = tentative_g;
 
             auto next_node = std::make_shared<AStarNode>(
-                next_pos, tentative_g, heuristic_octile(next_pos, goal), current);
+                next_pos, tentative_g, heuristic(next_pos, goal), current);
             
             // logger::log_info("Generated successor node: (" + std::to_string(neighbor.x) + "," +
             //                std::to_string(neighbor.y) + "), g-value: " +
             //                std::to_string(tentative_g) +
             //                ", h-value: " + std::to_string(heuristic(neighbor, goal)));
             
+            open_list.push(next_node);
+        }
+    }
+
+    logger::log_info("No path found");
+    return {};
+}
+
+// 支持自定义方向的A*搜索
+std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
+                          const std::vector<std::vector<int>>& grid,
+                          const std::vector<Vertex>& directions) {
+    auto start_time = std::chrono::steady_clock::now();
+
+    if(!utils::isPassable(grid, start) || !utils::isPassable(grid, goal)) {
+        return {};
+    }
+    std::priority_queue<std::shared_ptr<AStarNode>, 
+                       std::vector<std::shared_ptr<AStarNode>>, 
+                       AStarNodeComparator> open_list;
+    std::unordered_map<Vertex, double> closed_list;
+
+    auto start_node = std::make_shared<AStarNode>(start, 0, heuristic(start, goal));
+    open_list.push(start_node);
+
+    while (!open_list.empty()) {
+        auto current_time = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
+        if (elapsed >= MAX_SEARCH_TIME) {
+            logger::log_warning("A* search timed out after " + std::to_string(MAX_SEARCH_TIME) + " seconds");
+            return {};
+        }
+
+        auto current = open_list.top();
+        open_list.pop();
+
+        if (current->pos == goal) {
+            auto path = reconstruct_path(current);
+            return path;
+        }
+
+        for (const auto& move : directions) {
+            Vertex next_pos(current->pos.x + move.x, current->pos.y + move.y);
+
+            if (!utils::isWalkable(grid, current->pos, next_pos)) {
+                continue;
+            }
+
+            double tentative_g;
+            if (utils::isDiagonal(next_pos - current->pos)) {
+                tentative_g = current->g + std::sqrt(2.0);
+            } else {
+                tentative_g = current->g + 1.0;
+            }
+
+            if (closed_list.count(next_pos) && closed_list[next_pos] <= tentative_g) {
+                continue;
+            }
+
+            closed_list[next_pos] = tentative_g;
+
+            auto next_node = std::make_shared<AStarNode>(
+                next_pos, tentative_g, heuristic(next_pos, goal), current);
             open_list.push(next_node);
         }
     }

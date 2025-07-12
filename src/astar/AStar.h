@@ -38,4 +38,9 @@ struct AStarNodeComparator {
 std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal, 
                           const std::vector<std::vector<int>>& grid);
 
+// 支持自定义方向的A*搜索
+std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
+                          const std::vector<std::vector<int>>& grid,
+                          const std::vector<Vertex>& directions);
+
 #endif // ASTAR_H

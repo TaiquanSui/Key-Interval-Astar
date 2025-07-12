@@ -243,7 +243,7 @@ std::vector<Vertex> jump_point_search(const Vertex& start, const Vertex& goal,
     std::unordered_map<Vertex, double> closed_list;  // 改用unordered_map存储已访问节点
 
     // 创建并添加起始节点
-    auto start_node = std::make_shared<AStarNode>(start, 0, heuristic_octile(start, goal));
+    auto start_node = std::make_shared<AStarNode>(start, 0, heuristic(start, goal));
     open_list.push(start_node);
 
     while (!open_list.empty()) {
@@ -283,7 +283,7 @@ std::vector<Vertex> jump_point_search(const Vertex& start, const Vertex& goal,
             // 更新或添加到closed list
             closed_list[successor] = tentative_g;
 
-            double h_value = heuristic_octile(successor, goal);
+            double h_value = heuristic(successor, goal);
             auto next_node = std::make_shared<AStarNode>(
                 successor, 
                 tentative_g,

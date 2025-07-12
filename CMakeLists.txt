@@ -31,44 +31,41 @@ file(GLOB_RECURSE PROJECT_SOURCES
     "src/*.h"
     "data_loader/*.cpp"
     "data_loader/*.h"
-    "benchmark/*.cpp"
-    "benchmark/*.h"
+#    "benchmark/*.cpp"
+#    "benchmark/*.h"
 )
 
 # 只排除具体的benchmark可执行文件源文件
-list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/CBSBenchmark\\.cpp$")
-list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/JPSCBSBenchmark\\.cpp$")
-list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/Benchmark\\.cpp$")
-list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/CBSSingleTest\\.cpp$")
-list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/JPSCBSSingleTest\\.cpp$")
-list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/GenerateComparisonSummary\\.cpp$")
-list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/GenerateOverallStatistics\\.cpp$")
+#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/CBSBenchmark\\.cpp$")
+#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/JPSCBSBenchmark\\.cpp$")
+#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/Benchmark\\.cpp$")
+#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/CBSSingleTest\\.cpp$")
+#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/JPSCBSSingleTest\\.cpp$")
+#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/GenerateComparisonSummary\\.cpp$")
+#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/GenerateOverallStatistics\\.cpp$")
 
 # 创建库
 add_library(project_lib ${PROJECT_SOURCES})
 target_include_directories(project_lib PUBLIC ${CMAKE_SOURCE_DIR})
 
 
-# 基准测试程序
-add_executable(cbs_benchmark benchmark/CBSBenchmark.cpp)
-target_link_libraries(cbs_benchmark PRIVATE project_lib)
+# 创建test目录
+add_subdirectory(test)
 
-add_executable(jpscbs_benchmark benchmark/JPSCBSBenchmark.cpp)
-target_link_libraries(jpscbs_benchmark PRIVATE project_lib)
+# 添加Google Test
+add_executable(preprocess_test test/PreprocessTest.cpp)
+target_link_libraries(preprocess_test PRIVATE project_lib gtest gtest_main)
 
-add_executable(comparison_benchmark benchmark/Benchmark.cpp)
-target_link_libraries(comparison_benchmark PRIVATE project_lib)
+add_executable(preprocess_detailed_test test/PreprocessDetailedTest.cpp)
+target_link_libraries(preprocess_detailed_test PRIVATE project_lib gtest gtest_main)
 
-add_executable(jpscbs_single_test benchmark/JPSCBSSingleTest.cpp)
-target_link_libraries(jpscbs_single_test PRIVATE project_lib)
+add_executable(key_interval_astar_test test/KeyIntervalAStarTest.cpp)
+target_link_libraries(key_interval_astar_test PRIVATE project_lib gtest gtest_main)
 
-add_executable(cbs_single_test benchmark/CBSSingleTest.cpp)
-target_link_libraries(cbs_single_test PRIVATE project_lib)
-
-add_executable(generate_comparison_summary benchmark/GenerateComparisonSummary.cpp)
-target_link_libraries(generate_comparison_summary PRIVATE project_lib)
-
-add_executable(generate_overall_statistics benchmark/GenerateOverallStatistics.cpp)
-target_link_libraries(generate_overall_statistics PRIVATE project_lib)
+# 启用测试
+include(GoogleTest)
+gtest_discover_tests(preprocess_test)
+gtest_discover_tests(preprocess_detailed_test)
+gtest_discover_tests(key_interval_astar_test)
 
 

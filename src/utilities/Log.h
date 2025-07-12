@@ -6,6 +6,7 @@
 #include <vector>
 #include "../basic/Vertex.h"
 #include <sstream>
+#include <set>
 
 namespace logger {
     // Log level enum
@@ -68,6 +69,22 @@ namespace logger {
         ss << "]";
         return ss.str();
     }
+
+
+    template<typename T>
+    inline std::string setToString(const std::set<T>& set) {
+        std::stringstream ss;
+        ss << "[";
+        size_t i = 0;
+        for (const auto& item : set) {
+            ss << item;
+            if (i < set.size() - 1) ss << ", ";
+            ++i;
+        }
+        ss << "]";
+        return ss.str();
+    }
+
 
 }
 
