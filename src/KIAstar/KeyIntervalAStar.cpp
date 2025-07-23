@@ -1,84 +1,116 @@
 #include "KeyIntervalAStar.h"
 #include <algorithm>
+#include <chrono>
+#include <windows.h>
 #include "../action/Action.h"
 #include "../astar/AStar.h"
 #include "../utilities/Log.h"
+#include "../utilities/MemoryUtility.h"
+#include "../heuristic/Heuristic.h"
 
-KeyIntervalAStar::KeyIntervalAStar(const Preprocess &preprocess)
-    : preprocess_(preprocess)
+KeyIntervalAStar::KeyIntervalAStar(const Preprocess &preprocess, const std::string &name)
+    : preprocess_(&preprocess), name_(name)
 {
+    // 计算预处理占用的内存
+    preprocess_memory_usage_ = preprocess.getMemoryUsage();
+    preprocess_time_ = preprocess.getPreprocessTime();
+}
+
+// 新增：默认构造函数
+KeyIntervalAStar::KeyIntervalAStar(const std::string &name)
+    : preprocess_(nullptr), name_(name)
+{
+}
+
+// 新增：预处理方法
+void KeyIntervalAStar::preprocess(const std::vector<std::vector<int>>& grid) {
+    // 创建新的Preprocess对象
+    preprocess_ptr_ = std::make_unique<Preprocess>(grid);
+    preprocess_ptr_->preprocess();
+    
+    // 更新指针和统计信息
+    preprocess_ = preprocess_ptr_.get();
+    preprocess_memory_usage_ = preprocess_->getMemoryUsage();
+    preprocess_time_ = preprocess_->getPreprocessTime();
 }
 
 std::vector<Vertex> KeyIntervalAStar::search(const Vertex &start, const Vertex &target)
 {
+    // 检查是否已经预处理
+    if (!preprocess_) {
+        throw std::runtime_error("Preprocess not initialized. Call preprocess() first.");
+    }
+    
+    // 重置扩展节点计数和时间
+    expanded_nodes_ = 0;
+    search_time_ = 0.0;
+    search_memory_increase_ = 0;
+
+    // 记录搜索开始前的内存使用量
+    size_t memory_before = memory_utils::get_current_memory_usage();
+    
+    // 使用QueryPerformanceCounter计时
+    LARGE_INTEGER freq, t_start, t_end;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&t_start);
+
     // 1. 可达性检查
-    if (!utils::isPassable(preprocess_.getGrid(), start) || !utils::isPassable(preprocess_.getGrid(), target))
+    if (!utils::isPassable(preprocess_->getGrid(), start) || !utils::isPassable(preprocess_->getGrid(), target))
     {
-        logger::log_info("Start or target vertex is unreachable");
+        QueryPerformanceCounter(&t_end);
+        search_time_ = static_cast<double>(t_end.QuadPart - t_start.QuadPart) / freq.QuadPart;
         return {};
     }
 
-    // 2. 查找起点和终点的key intervals
-    auto result = findNearestKeyIntervals(start, target);
-    if (result.result == ReachabilityResult::UNREACHABLE)
+    auto queryResult = queryKeyIntervals(start, target);
+    if (queryResult.directlyReachable)
     {
-        logger::log_info("Start or target vertex is unreachable");
-        return {};
-    }
-    if (result.result == ReachabilityResult::DIRECT_PATH)
-    {
-        logger::log_info("start and target are directly reachable");
-        return constructPath({start, target});
+        auto path = constructPath({start, target});
+        QueryPerformanceCounter(&t_end);
+        search_time_ = static_cast<double>(t_end.QuadPart - t_start.QuadPart) / freq.QuadPart;
+        return path;
     }
 
     // 初始化A*搜索
     std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>> openList;
     std::unordered_map<IntervalKey, double, IntervalKeyHash> gScore; // 记录g值
 
-    auto startInterval = findContainingVerticalInterval(start);
-    if(preprocess_.findKeyInterval(IntervalKey{startInterval->y, startInterval->start, startInterval->end})){
-        gScore[IntervalKey{startInterval->y, startInterval->start, startInterval->end}] = 0;
-    }
-
-    // 将起点的key intervals加入openList
-    for (const auto &[startKeyInterval, startDirectNeighbor] : result.startIntervals)
-    {
-        std::vector<Vertex> initialWaypoints = {start};
-        auto [g, h] = calcGAndH(initialWaypoints, startKeyInterval, target);
-        Vertex upVertex = Vertex(startKeyInterval.end, startKeyInterval.y);
-        Vertex downVertex = Vertex(startKeyInterval.start, startKeyInterval.y);
-        SearchNode initialNode = SearchNode(startKeyInterval, g, g + h,
-                                            IntervalKey{-1, -1, -1},
-                                            startDirectNeighbor,
-                                            upVertex, downVertex,
-                                            initialWaypoints);
-        insertNode(initialNode, openList, gScore);
-    }
+    initializeStartNode(start, target, queryResult, openList, gScore);
 
     while (!openList.empty())
     {
         SearchNode current = openList.top();
         openList.pop();
+        logger::log_info("current key interval: " + std::to_string(current.keyInterval.has_value() ? current.keyInterval.value().y : -1) + "," + std::to_string(current.keyInterval.has_value() ? current.keyInterval.value().start : -1) + "," + std::to_string(current.keyInterval.has_value() ? current.keyInterval.value().end : -1));
+        logger::log_info("current up vertex: " + (current.upVertex ? std::to_string(current.upVertex.value().x) + "," + std::to_string(current.upVertex.value().y) : "null"));
+        logger::log_info("current down vertex: " + (current.downVertex ? std::to_string(current.downVertex.value().x) + "," + std::to_string(current.downVertex.value().y) : "null"));
+        logger::log_info("from parent: " + (current.parent ? std::to_string(current.parent.value().y) + "," + std::to_string(current.parent.value().start) + "," + std::to_string(current.parent.value().end) : "null"));
+        logger::log_info("current waypoints: " + logger::vectorToString(current.waypoints));
+        logger::log_info("g: " + std::to_string(current.g));
+        logger::log_info("h: " + std::to_string(current.f - current.g));
 
         // 检查是否到达终点
         if (current.isTarget)
         {
+            expanded_nodes_++;
+            QueryPerformanceCounter(&t_end);
+            search_time_ = static_cast<double>(t_end.QuadPart - t_start.QuadPart) / freq.QuadPart;
+            
+            // 记录搜索结束后的内存使用量
+            size_t memory_after = memory_utils::get_current_memory_usage();
+            search_memory_increase_ = memory_utils::calculate_memory_increase(memory_before, memory_after);
+            
             return constructPath(current.waypoints);
         }
 
-        // 获取当前key interval
-        const auto &currentInterval = preprocess_.getKeyIntervals().at(current.keyInterval);
-        
         // 检查是否在终点key intervals中
-        for (const auto &[targetKeyInterval, targetFromDirectNeighbor] : result.targetIntervals)
+        if (handleTargetKeyIntervals(current, target, queryResult, openList, gScore))
         {
-            if (current.keyInterval == targetKeyInterval)
-            {
-                auto targetNode = handleTargetKeyInterval(current, targetFromDirectNeighbor, target);
-                insertNode(targetNode, openList, gScore);
-                break;
-            }
+            continue;
         }
+        
+        // 获取当前key interval
+        const auto &currentInterval = preprocess_->getKeyIntervals().at(current.keyInterval.value());
 
         // 遍历当前key interval的邻居
         for (const auto &triple : currentInterval.neighbors)
@@ -86,257 +118,170 @@ std::vector<Vertex> KeyIntervalAStar::search(const Vertex &start, const Vertex &
             // 跳过父节点
             if (triple.neighborKeyInterval == current.parent)
                 continue;
-            logger::log_info("expand neighbor: [" + std::to_string(triple.neighborKeyInterval.y) + "," + std::to_string(triple.neighborKeyInterval.start) + "," + std::to_string(triple.neighborKeyInterval.end) + "] from parent: [" + std::to_string(current.keyInterval.y) + "," + std::to_string(current.keyInterval.start) + "," + std::to_string(current.keyInterval.end) + "]");
+            logger::log_info("handle neighbor: " + std::to_string(triple.neighborKeyInterval.y) + "," + std::to_string(triple.neighborKeyInterval.start) + "," + std::to_string(triple.neighborKeyInterval.end));
             auto neighborNode = handleNeighbor(current, triple, target);
             insertNode(neighborNode, openList, gScore);
+            expanded_nodes_++; // 增加扩展节点计数
         }
     }
 
     // 如果没有找到路径，返回空路径
+    QueryPerformanceCounter(&t_end);
+    search_time_ = static_cast<double>(t_end.QuadPart - t_start.QuadPart) / freq.QuadPart;
+    
+    // 记录搜索结束后的内存使用量
+    size_t memory_after = memory_utils::get_current_memory_usage();
+    search_memory_increase_ = memory_utils::calculate_memory_increase(memory_before, memory_after);
+    
     return {};
 }
 
-KeyIntervalAStar::NearestKeyIntervalsResult KeyIntervalAStar::findNearestKeyIntervals(const Vertex &start, const Vertex &target)
+KeyIntervalAStar::KeyIntervalQueryResult KeyIntervalAStar::queryKeyIntervals(const Vertex &start, const Vertex &target) const
 {
-    logger::log_info("find nearest key intervals for start: (" + std::to_string(start.x) + "," + std::to_string(start.y) +
-                     ") and target: (" + std::to_string(target.x) + "," + std::to_string(target.y) + ")");
+    KeyIntervalQueryResult result;
+    auto startIntervalOpt = preprocess_->findContainingVerticalInterval(start);
+    auto targetIntervalOpt = preprocess_->findContainingVerticalInterval(target);
+    if (!startIntervalOpt || !targetIntervalOpt)
+    {
+        result.directlyReachable = false;
+        return result;
+    }
+    const auto &startInterval = *startIntervalOpt;
+    const auto &targetInterval = *targetIntervalOpt;
 
-    // 1. 查找起点的key intervals
-    auto startInterval = findContainingVerticalInterval(start);
-    if (!startInterval)
-    {
-        logger::log_info("no vertical interval found for start: " + std::to_string(start.x) + "," + std::to_string(start.y));
-        return {ReachabilityResult::UNREACHABLE, {}}; // 没有找到包含vertex的vertical interval，不可达
-    }
+    IntervalKey startKey{startInterval.y, startInterval.start, startInterval.end};
+    IntervalKey targetKey{targetInterval.y, targetInterval.start, targetInterval.end};
 
-    // 2. 处理邻居链
-    auto [startResult, startIntervals] = processNeighborChains(*startInterval, start, target, true);
-    if (startResult == ReachabilityResult::UNREACHABLE)
+    // 设置起点和终点所在的关键区间
+    if (preprocess_->findKeyInterval(startKey))
     {
-        logger::log_info("Start vertex is unreachable");
-        return {ReachabilityResult::UNREACHABLE, {}, {}};
+        result.startK = startKey;
     }
-    if (startResult == ReachabilityResult::DIRECT_PATH)
+    if (preprocess_->findKeyInterval(targetKey))
     {
-        logger::log_info("start and target are directly reachable");
-        return {ReachabilityResult::DIRECT_PATH, {}, {}};
-    }
-
-    // 2. 查找终点的key intervals
-    auto targetInterval = findContainingVerticalInterval(target);
-    if (!targetInterval)
-    {
-        logger::log_info("no vertical interval found for target: " + std::to_string(target.x) + "," + std::to_string(target.y));
-        return {ReachabilityResult::UNREACHABLE, {}, {}}; // 没有找到包含vertex的vertical interval，不可达
-    }
-    auto [targetResult, targetIntervals] = processNeighborChains(*targetInterval, target, target, false);
-    if (targetResult == ReachabilityResult::UNREACHABLE)
-    {
-        logger::log_info("Target vertex is unreachable");
-        return {ReachabilityResult::UNREACHABLE, {}, {}};
+        result.targetK = targetKey;
     }
 
-    return {ReachabilityResult::DONE, startIntervals, targetIntervals};
+    const auto &startLeft = startInterval.leftKeyInterval;
+    const auto &startRight = startInterval.rightKeyInterval;
+    const auto &targetLeft = targetInterval.leftKeyInterval;
+    const auto &targetRight = targetInterval.rightKeyInterval;
+
+    // 判断是否直接可达
+    result.directlyReachable =
+        (result.startK && result.targetK && result.startK.value() == result.targetK.value()) ||
+        (result.startK && targetLeft && targetLeft->first == result.startK.value()) ||
+        (result.startK && targetRight && targetRight->first == result.startK.value()) ||
+        (result.targetK && startLeft && startLeft->first == result.targetK.value()) ||
+        (result.targetK && startRight && startRight->first == result.targetK.value()) ||
+        (!result.startK && !result.targetK && startLeft == targetLeft && startRight == targetRight) ||
+        (!result.startK && !result.targetK && !startLeft && !startRight) ||
+        (!result.startK && !result.targetK && !targetLeft && !targetRight);
+
+    // 只有不可直达时才需要A*的key interval集合
+    if (!result.directlyReachable)
+    {
+        result.startLeft = startLeft;
+        result.startRight = startRight;
+        result.targetLeft = targetLeft;
+        result.targetRight = targetRight;
+    }
+    return result;
 }
 
-std::optional<VerticalInterval> KeyIntervalAStar::findContainingVerticalInterval(const Vertex &vertex) const
+void KeyIntervalAStar::initializeStartNode(const Vertex &start, const Vertex &target,
+                                           const KeyIntervalQueryResult &queryResult,
+                                           std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>> &openList,
+                                           std::unordered_map<IntervalKey, double, IntervalKeyHash> &gScore)
 {
-    const auto &verticalIntervals = preprocess_.getVerticalIntervals();
-
-    // 检查vertex.y是否在有效范围内
-    auto yIt = verticalIntervals.find(vertex.y);
-    if (yIt == verticalIntervals.end())
+    if (queryResult.startK)
     {
-        return std::nullopt;
-    }
-
-    for (const auto &[_, interval] : yIt->second)
-    {
-        if (vertex.x >= interval.start && vertex.x <= interval.end)
-        {
-            return interval;
-        }
-    }
-    return std::nullopt;
-}
-
-std::pair<KeyIntervalAStar::ReachabilityResult, std::unordered_map<IntervalKey, IntervalKey, IntervalKeyHash>> KeyIntervalAStar::processNeighborChains(const VerticalInterval &interval,
-                                                                                                                                       const Vertex &vertex,
-                                                                                                                                       const Vertex &target,
-                                                                                                                                       bool isStart) const
-{
-    std::unordered_map<IntervalKey, IntervalKey, IntervalKeyHash> keyIntervals;
-
-    // 首先检查当前interval本身是否是key interval且包含target
-    IntervalKey currentKey{interval.y, interval.start, interval.end};
-    if (isStart && isVertexInKeyInterval(target, currentKey))
-    {
-        logger::log_info("find direct path in current interval for vertex: " + std::to_string(vertex.x) + "," + std::to_string(vertex.y));
-        return {ReachabilityResult::DIRECT_PATH, keyIntervals};
-    }
-
-    // 使用统一的邻居链处理方法
-    if (processNeighborChain(currentKey, vertex, target, isStart, keyIntervals, true))
-    {
-        logger::log_info("find direct path in left neighbors for vertex: " + std::to_string(vertex.x) + "," + std::to_string(vertex.y));
-        return {ReachabilityResult::DIRECT_PATH, keyIntervals};
-    }
-
-    if (processNeighborChain(currentKey, vertex, target, isStart, keyIntervals, false))
-    {
-        logger::log_info("find direct path in right neighbors for vertex: " + std::to_string(vertex.x) + "," + std::to_string(vertex.y));
-        return {ReachabilityResult::DIRECT_PATH, keyIntervals};
-    }
-
-    // 如果找不到key intervals，说明不可达
-    if (keyIntervals.empty())
-    {
-        logger::log_info("unreachable for vertex: " + std::to_string(vertex.x) + "," + std::to_string(vertex.y));
-        return {ReachabilityResult::UNREACHABLE, keyIntervals};
-    }
-
-    return {ReachabilityResult::DONE, keyIntervals};
-}
-
-// 新增：安全的vertical interval访问
-std::optional<VerticalInterval> KeyIntervalAStar::getVerticalInterval(const IntervalKey &key) const
-{
-    const auto &verticalIntervals = preprocess_.getVerticalIntervals();
-
-    auto yIt = verticalIntervals.find(key.y);
-    if (yIt == verticalIntervals.end())
-    {
-        return std::nullopt;
-    }
-
-    auto startIt = yIt->second.find(key.start);
-    if (startIt == yIt->second.end())
-    {
-        return std::nullopt;
-    }
-
-    return startIt->second;
-}
-
-// 新增：统一的邻居链处理逻辑
-bool KeyIntervalAStar::processNeighborChain(const IntervalKey &currentKey,
-                                            const Vertex &vertex,
-                                            const Vertex &target,
-                                            bool isStart,
-                                            std::unordered_map<IntervalKey, IntervalKey, IntervalKeyHash> &keyIntervals,
-                                            bool isLeftDirection) const
-{
-    const auto &currentInterval = preprocess_.getVerticalIntervals().at(currentKey.y).at(currentKey.start);
-    const auto &neighbors = isLeftDirection ? currentInterval.leftNeighbors : currentInterval.rightNeighbors;
-    for (const auto &neighbor : neighbors)
-    {
-        // logger::log_info("process neighbor: " + std::to_string(neighbor.y) + "," + std::to_string(neighbor.start) + "," + std::to_string(neighbor.end) + " for vertex: " + std::to_string(vertex.x) + "," + std::to_string(vertex.y));
-        //  检查neighbor本身是否是key interval
-        if (isStart && isVertexInKeyInterval(target, neighbor))
-        {
-            keyIntervals.clear();
-            logger::log_info("find target vertex: " + std::to_string(neighbor.y) + "," + std::to_string(neighbor.start) + "," + std::to_string(neighbor.end) + " for vertex: " + std::to_string(vertex.x) + "," + std::to_string(vertex.y));
-            return true; // 找到target vertex
-        }
-
-        if (preprocess_.findKeyInterval(neighbor))
-        {
-            logger::log_info("find key interval: " + std::to_string(neighbor.y) + "," + std::to_string(neighbor.start) + "," + std::to_string(neighbor.end) + " for vertex: " + std::to_string(vertex.x) + "," + std::to_string(vertex.y));
-            keyIntervals[neighbor] = currentKey;
-            break; // 找到关键区间，退出循环
-        }
-
-        // 安全地获取vertical interval
-        auto currentIntervalOpt = getVerticalInterval(neighbor);
-        if (!currentIntervalOpt)
-        {
-            continue; // 跳过无效的neighbor
-        }
-
-        VerticalInterval currentInterval = *currentIntervalOpt;
-        IntervalKey directNeighbor = neighbor; // 记录路径上的直接邻居
-
-        // 沿着邻居链查找key interval
-        while (true)
-        {
-            const auto &neighborSet = isLeftDirection ? currentInterval.leftNeighbors : currentInterval.rightNeighbors;
-
-            if (neighborSet.empty())
-            {
-                break; // 没有更多邻居，退出循环
-            }
-
-            const auto &nextNeighbor = *neighborSet.begin();
-            logger::log_info("next neighbor: " + std::to_string(nextNeighbor.y) + "," + std::to_string(nextNeighbor.start) + "," + std::to_string(nextNeighbor.end) + " for vertex: " + std::to_string(vertex.x) + "," + std::to_string(vertex.y));
-            if (isStart && isVertexInKeyInterval(target, nextNeighbor))
-            {
-                keyIntervals.clear();
-                logger::log_info("find target vertex: " + std::to_string(nextNeighbor.y) + "," + std::to_string(nextNeighbor.start) + "," + std::to_string(nextNeighbor.end) + " for vertex: " + std::to_string(vertex.x) + "," + std::to_string(vertex.y));
-                return true; // 找到target vertex
-            }
-
-            if (preprocess_.findKeyInterval(nextNeighbor))
-            {
-                logger::log_info("find key interval: " + std::to_string(nextNeighbor.y) + "," + std::to_string(nextNeighbor.start) + "," + std::to_string(nextNeighbor.end) + " for vertex: " + std::to_string(vertex.x) + "," + std::to_string(vertex.y));
-                keyIntervals[nextNeighbor] = directNeighbor;
-                break; // 找到关键区间，退出循环
-            }
-
-            // 安全地获取下一个interval
-            auto nextIntervalOpt = getVerticalInterval(nextNeighbor);
-            if (!nextIntervalOpt)
-            {
-                break; // 无效的neighbor，退出循环
-            }
-            directNeighbor = nextNeighbor;
-            currentInterval = *nextIntervalOpt;
+        gScore[queryResult.startK.value()] = 0.0;
+        for (NeighborTriple triple : preprocess_->getKeyIntervals().at(queryResult.startK.value()).neighbors) {
+            auto startKeyInterval = triple.neighborKeyInterval;
+            auto startDirectNeighbor = triple.neighborDirectNeighbor;
+            std::vector<Vertex> initialWaypoints = {start};
+            auto [g, h] = calcGAndH(initialWaypoints, startKeyInterval, target);
+            std::optional<Vertex> up = preprocess_->getKeyIntervals().at(startKeyInterval).getUpVertex();
+            std::optional<Vertex> down = preprocess_->getKeyIntervals().at(startKeyInterval).getDownVertex();
+            SearchNode initialNode = SearchNode(startKeyInterval, g, g + h,
+                                                std::nullopt,
+                                                startDirectNeighbor,
+                                                up, down,
+                                                initialWaypoints);
+            insertNode(initialNode, openList, gScore);
         }
     }
 
-    return false; // 没有找到target vertex
-}
-
-bool KeyIntervalAStar::isVertexInKeyInterval(const Vertex &vertex, const IntervalKey &key) const
-{
-    return vertex.y == key.y &&
-           vertex.x >= key.start &&
-           vertex.x <= key.end;
+    // 起点不在关键区间内，使用左右邻居
+    if (queryResult.startLeft)
+    {
+        const auto &[startKeyInterval, startDirectNeighbor] = queryResult.startLeft.value();
+        std::vector<Vertex> initialWaypoints = {start};
+        auto [g, h] = calcGAndH(initialWaypoints, startKeyInterval, target);
+        std::optional<Vertex> up = preprocess_->getKeyIntervals().at(startKeyInterval).getUpVertex();
+        std::optional<Vertex> down = preprocess_->getKeyIntervals().at(startKeyInterval).getDownVertex();
+        SearchNode initialNode = SearchNode(startKeyInterval, g, g + h,
+                                            std::nullopt,
+                                            startDirectNeighbor,
+                                            up, down,
+                                            initialWaypoints);
+        insertNode(initialNode, openList, gScore);
+    }
+    if (queryResult.startRight)
+    {
+        const auto &[startKeyInterval, startDirectNeighbor] = queryResult.startRight.value();
+        std::vector<Vertex> initialWaypoints = {start};
+        auto [g, h] = calcGAndH(initialWaypoints, startKeyInterval, target);
+        std::optional<Vertex> up = preprocess_->getKeyIntervals().at(startKeyInterval).getUpVertex();
+        std::optional<Vertex> down = preprocess_->getKeyIntervals().at(startKeyInterval).getDownVertex();
+        SearchNode initialNode = SearchNode(startKeyInterval, g, g + h,
+                                            std::nullopt,
+                                            startDirectNeighbor,
+                                            up, down,
+                                            initialWaypoints);
+        insertNode(initialNode, openList, gScore);
+    }
 }
 
 KeyIntervalAStar::SearchNode KeyIntervalAStar::handleNeighbor(const KeyIntervalAStar::SearchNode &current,
-                                      const NeighborTriple &neighborTriple,
-                                      const Vertex &target)
+                                                              const NeighborTriple &neighborTriple,
+                                                              const Vertex &target)
 {
     // 检查是否有transition vertex
-    auto transitionVertex = findTransitionVertex(current.keyInterval, current.fromDirectNeighbor, neighborTriple.currentDirectNeighbor);
+    auto transitionVertex = preprocess_->findTransitionVertex(current.keyInterval.value(), current.fromDirectNeighbor.value(), neighborTriple.currentDirectNeighbor);
     if (transitionVertex.has_value())
     {
         logger::log_info("find transition vertex: " + std::to_string(transitionVertex.value().x) + "," + std::to_string(transitionVertex.value().y));
         return directTransition(current, neighborTriple, transitionVertex.value(), target);
     }
-    
+
     // 处理key points
     return handleUpDownVertex(current, neighborTriple, target);
 }
 
 KeyIntervalAStar::SearchNode KeyIntervalAStar::directTransition(const KeyIntervalAStar::SearchNode &current,
-                                        const NeighborTriple &neighborTriple,
-                                        const Vertex &transitionVertex,
-                                        const Vertex &target)
+                                                                const NeighborTriple &neighborTriple,
+                                                                const Vertex &transitionVertex,
+                                                                const Vertex &target)
 {
     std::vector<Vertex> newWaypoints = current.waypoints;
-    
+    KeyInterval neighborKeyInterval = preprocess_->getKeyIntervals().at(neighborTriple.neighborKeyInterval);
+
+
     if (checkAndAddUpDownVertex(transitionVertex, current.waypoints.back(), newWaypoints, current))
     {
         logger::log_info("up/down vertex added: " + std::to_string(newWaypoints.back().x) + "," + std::to_string(newWaypoints.back().y));
         newWaypoints.push_back(transitionVertex);
         auto [g, h] = calcGAndH(newWaypoints, neighborTriple.neighborKeyInterval, target);
 
+        std::optional<Vertex> upVertex = neighborKeyInterval.getUpVertex();
+        std::optional<Vertex> downVertex = neighborKeyInterval.getDownVertex();
         KeyIntervalAStar::SearchNode newNode = KeyIntervalAStar::SearchNode(neighborTriple.neighborKeyInterval, g, g + h,
-                                        current.keyInterval,
-                                        neighborTriple.neighborDirectNeighbor,
-                                        Vertex(-1, -1), Vertex(-1, -1),
-                                        newWaypoints);
+                                                                            current.keyInterval,
+                                                                            neighborTriple.neighborDirectNeighbor,
+                                                                            upVertex, downVertex,
+                                                                            newWaypoints);
         return newNode;
     }
     else
@@ -344,150 +289,196 @@ KeyIntervalAStar::SearchNode KeyIntervalAStar::directTransition(const KeyInterva
         newWaypoints.push_back(transitionVertex);
         auto [g, h] = calcGAndH(newWaypoints, neighborTriple.neighborKeyInterval, target);
 
+        std::optional<Vertex> upVertex = neighborKeyInterval.getUpVertex();
+        std::optional<Vertex> downVertex = neighborKeyInterval.getDownVertex();
         KeyIntervalAStar::SearchNode newNode = KeyIntervalAStar::SearchNode(neighborTriple.neighborKeyInterval, g, g + h,
-                                            current.keyInterval,
-                                            neighborTriple.neighborDirectNeighbor,
-                                            Vertex(-1, -1), Vertex(-1, -1),
-                                            newWaypoints);
+                                                                            current.keyInterval,
+                                                                            neighborTriple.neighborDirectNeighbor,
+                                                                            upVertex, downVertex,
+                                                                            newWaypoints);
         return newNode;
     }
 }
 
 KeyIntervalAStar::SearchNode KeyIntervalAStar::handleUpDownVertex(const KeyIntervalAStar::SearchNode &current,
-                                          const NeighborTriple &neighborTriple,
-                                          const Vertex &target)
+                                                                  const NeighborTriple &neighborTriple,
+                                                                  const Vertex &target)
 {
-    const auto &neighborInterval = preprocess_.getKeyIntervals().at(neighborTriple.neighborKeyInterval);
+    logger::log_info("handle up/down vertex");
+    const auto &neighborInterval = preprocess_->getKeyIntervals().at(neighborTriple.neighborKeyInterval);
 
-    Vertex tempUpVertex = current.upVertex;
-    Vertex tempDownVertex = current.downVertex;
+    std::optional<Vertex> tempUpVertex = current.upVertex;
+    std::optional<Vertex> tempDownVertex = current.downVertex;
     bool shouldBreak = false;
     std::vector<Vertex> newWaypoints = current.waypoints;
 
-    // 检查邻居interval中的key points
-    for (const auto &keyPoint : neighborInterval.getVerticalKeyPoints())
+    if (current.downVertex &&
+        neighborInterval.getEnd() < current.downVertex.value().x &&
+        current.waypoints.back().x < current.downVertex.value().x)
     {
-        if (keyPoint.direction == Preprocess::Direction::UP)
-        {
-            if (current.downVertex.x != -1 &&
-                keyPoint.point.x < current.downVertex.x &&
-                current.waypoints.back().x < current.downVertex.x)
-            {
-                newWaypoints.push_back(current.downVertex);
-                newWaypoints.push_back(keyPoint.point);
-                shouldBreak = true;
-                break;
-            }
-            if (tempUpVertex.x == -1 || keyPoint.point.x < tempUpVertex.x)
-            {
-                tempUpVertex = keyPoint.point;
+        newWaypoints.push_back(current.downVertex.value());
+        newWaypoints.push_back(Vertex(neighborInterval.getEnd(), neighborInterval.getY()));
+        shouldBreak = true;
+        logger::log_info("new waypoints: " + logger::vectorToString(newWaypoints));
+    }
+
+    if (!shouldBreak && 
+        current.upVertex &&
+        neighborInterval.getStart() > current.upVertex.value().x &&
+        current.waypoints.back().x > current.upVertex.value().x)
+    {
+        newWaypoints.push_back(current.upVertex.value());
+        newWaypoints.push_back(Vertex(neighborInterval.getStart(), neighborInterval.getY()));
+        shouldBreak = true;
+        logger::log_info("new waypoints: " + logger::vectorToString(newWaypoints));
+    }
+
+    if (!shouldBreak) {
+        std::optional<Vertex> upV = neighborInterval.getUpVertex();
+        if (upV) {
+            if (!tempUpVertex || upV.value().x < tempUpVertex.value().x){
+                tempUpVertex = upV;
+                logger::log_info("update up vertex: " + std::to_string(tempUpVertex.value().x) + "," + std::to_string(tempUpVertex.value().y));
             }
         }
-        else if (keyPoint.direction == Preprocess::Direction::DOWN)
-        {
-            if (current.upVertex.x != -1 &&
-                keyPoint.point.x > current.upVertex.x &&
-                current.waypoints.back().x > current.upVertex.x)
-            {
-                newWaypoints.push_back(current.upVertex);
-                newWaypoints.push_back(keyPoint.point);
-                shouldBreak = true;
-                break;
-            }
-            if (tempDownVertex.x == -1 || keyPoint.point.x > tempDownVertex.x)
-            {
-                tempDownVertex = keyPoint.point;
+        std::optional<Vertex> downV = neighborInterval.getDownVertex();
+        if (downV) {
+            if (!tempDownVertex || downV.value().x > tempDownVertex.value().x){
+                tempDownVertex = downV;
+                logger::log_info("update down vertex: " + std::to_string(tempDownVertex.value().x) + "," + std::to_string(tempDownVertex.value().y));
             }
         }
     }
 
-    Vertex newUpVertex = shouldBreak ? Vertex(-1, -1) : tempUpVertex;
-    Vertex newDownVertex = shouldBreak ? Vertex(-1, -1) : tempDownVertex;
+    std::optional<Vertex> newUpVertex = shouldBreak ? std::nullopt : tempUpVertex;
+    std::optional<Vertex> newDownVertex = shouldBreak ? std::nullopt : tempDownVertex;
 
-    IntervalKey evaluationInterval = {neighborTriple.neighborKeyInterval.y, 
-                                    newDownVertex.x == -1 ? neighborTriple.neighborKeyInterval.start : newDownVertex.x,
-                                    newUpVertex.x == -1 ? neighborTriple.neighborKeyInterval.end : newUpVertex.x};
-    logger::log_info("evaluation interval: " + std::to_string(evaluationInterval.y) + "," + std::to_string(evaluationInterval.start) + "," + std::to_string(evaluationInterval.end));
-    auto [g, h] = calcGAndH(newWaypoints, evaluationInterval, target);
-
-    logger::log_info("g: " + std::to_string(g) + " h: " + std::to_string(h));
-    logger::log_info("come from: " + std::to_string(neighborTriple.neighborDirectNeighbor.y) + "," + std::to_string(neighborTriple.neighborDirectNeighbor.start) + "," + std::to_string(neighborTriple.neighborDirectNeighbor.end));
-    logger::log_info("up vertex: " + std::to_string(newUpVertex.x) + "," + std::to_string(newUpVertex.y));
-    logger::log_info("down vertex: " + std::to_string(newDownVertex.x) + "," + std::to_string(newDownVertex.y));
+    auto [g, h] = calcGAndH(newWaypoints, neighborTriple.neighborKeyInterval, target);
+    
     KeyIntervalAStar::SearchNode newNode = KeyIntervalAStar::SearchNode(neighborTriple.neighborKeyInterval, g, g + h,
-                                        current.keyInterval,
-                                        neighborTriple.neighborDirectNeighbor,
-                                        newUpVertex, newDownVertex,
-                                        newWaypoints);
+                                                                        current.keyInterval,
+                                                                        neighborTriple.neighborDirectNeighbor,
+                                                                        newUpVertex, newDownVertex,
+                                                                        newWaypoints);
     return newNode;
 }
 
-KeyIntervalAStar::SearchNode KeyIntervalAStar::handleTargetKeyInterval(const KeyIntervalAStar::SearchNode &current,
-                                               const IntervalKey &targetFromDirectNeighbor,
-                                               const Vertex &target)
+bool KeyIntervalAStar::handleTargetKeyIntervals(const SearchNode &current, const Vertex &target,
+                                                const KeyIntervalQueryResult &queryResult,
+                                                std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>> &openList,
+                                                std::unordered_map<IntervalKey, double, IntervalKeyHash> &gScore)
 {
-    logger::log_info("handle target key interval: " + std::to_string(current.keyInterval.y) + "," + std::to_string(current.keyInterval.start) + "," + std::to_string(current.keyInterval.end));
-    std::vector<Vertex> finalWaypoints = current.waypoints;
-    double g = current.g;
+    // 检查是否在终点key intervals中
+    if (queryResult.targetK && current.keyInterval.value() == queryResult.targetK.value())
+    {
+        // 终点在关键区间内
+        auto targetNode = handleTargetKeyInterval(current, queryResult.targetK.value(), target);
+        insertNode(targetNode, openList, gScore);
+        expanded_nodes_++;
+        return true;
+    }
+    else
+    {
+        // 终点不在关键区间内，检查左右邻居
+        if (queryResult.targetLeft)
+        {
+            const auto &[targetKeyInterval, targetFromDirectNeighbor] = queryResult.targetLeft.value();
+            if (current.keyInterval.value() == targetKeyInterval)
+            {
+                auto targetNode = handleTargetKeyInterval(current, targetFromDirectNeighbor, target);
+                insertNode(targetNode, openList, gScore);
+                expanded_nodes_++;
+                return true;
+            }
+        }
+        if (queryResult.targetRight)
+        {
+            const auto &[targetKeyInterval, targetFromDirectNeighbor] = queryResult.targetRight.value();
+            if (current.keyInterval.value() == targetKeyInterval)
+            {
+                auto targetNode = handleTargetKeyInterval(current, targetFromDirectNeighbor, target);
+                insertNode(targetNode, openList, gScore);
+                expanded_nodes_++;
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
-    const auto &endKeyInterval = preprocess_.getKeyIntervals().at(current.keyInterval);
-    logger::log_info("current from direct neighbor: " + std::to_string(current.fromDirectNeighbor.y) + "," + std::to_string(current.fromDirectNeighbor.start) + "," + std::to_string(current.fromDirectNeighbor.end));
+KeyIntervalAStar::SearchNode KeyIntervalAStar::handleTargetKeyInterval(const KeyIntervalAStar::SearchNode &current,
+                                                                       const IntervalKey &targetFromDirectNeighbor,
+                                                                       const Vertex &target)
+{
+    logger::log_info("handle target key interval: " + std::to_string(current.keyInterval.value().y) + "," + std::to_string(current.keyInterval.value().start) + "," + std::to_string(current.keyInterval.value().end));
+    std::vector<Vertex> finalWaypoints = current.waypoints;
+
+    const auto &endKeyInterval = preprocess_->getKeyIntervals().at(current.keyInterval.value());
+    logger::log_info("current from direct neighbor: " + std::to_string(current.fromDirectNeighbor.value().y) + "," + std::to_string(current.fromDirectNeighbor.value().start) + "," + std::to_string(current.fromDirectNeighbor.value().end));
     logger::log_info("target from direct neighbor: " + std::to_string(targetFromDirectNeighbor.y) + "," + std::to_string(targetFromDirectNeighbor.start) + "," + std::to_string(targetFromDirectNeighbor.end));
 
-    auto transitionVertexOpt = findTransitionVertex(current.keyInterval, current.fromDirectNeighbor, targetFromDirectNeighbor);
+    auto transitionVertexOpt = preprocess_->findTransitionVertex(current.keyInterval.value(), current.fromDirectNeighbor.value(), targetFromDirectNeighbor);
 
     if (transitionVertexOpt.has_value())
     {
         Vertex transitionVertex = transitionVertexOpt.value();
         logger::log_info("find transition vertex: " + std::to_string(transitionVertex.x) + "," + std::to_string(transitionVertex.y));
 
-        if(checkAndAddUpDownVertex(transitionVertex, current.waypoints.back(), finalWaypoints, current))
+        if (checkAndAddUpDownVertex(transitionVertex, current.waypoints.back(), finalWaypoints, current))
         {
-            g += calculateHeuristicDistance(*(finalWaypoints.rbegin()+1), finalWaypoints.back());
-            g += calculateHeuristicDistance(finalWaypoints.back(), transitionVertex);
-            g += calculateHeuristicDistance(transitionVertex, target);
-
             finalWaypoints.push_back(transitionVertex);
             finalWaypoints.push_back(target);
 
-            KeyIntervalAStar::SearchNode targetNode = KeyIntervalAStar::SearchNode(IntervalKey{-1, -1, -1}, g, g,
-                                               current.keyInterval,
-                                               IntervalKey{-1, -1, -1},
-                                               Vertex(-1, -1), Vertex(-1, -1),
-                                               finalWaypoints, true);
+            double g = 0.0;
+            for (size_t i = 1; i < finalWaypoints.size(); ++i)
+            {
+                g += heuristic(finalWaypoints[i - 1], finalWaypoints[i]);
+            }
+
+            KeyIntervalAStar::SearchNode targetNode = KeyIntervalAStar::SearchNode(std::nullopt, g, g,
+                                                                                   current.keyInterval,
+                                                                                   std::nullopt,
+                                                                                   std::nullopt, std::nullopt,
+                                                                                   finalWaypoints, true);
             return targetNode;
-        }else{
-            g += calculateHeuristicDistance(finalWaypoints.back(), transitionVertex);
-            g += calculateHeuristicDistance(transitionVertex, target);
+        }
+        else
+        {
+            logger::log_info("no up/down vertex found before transition vertex for target");
             finalWaypoints.push_back(transitionVertex);
             finalWaypoints.push_back(target);
 
-            KeyIntervalAStar::SearchNode targetNode = KeyIntervalAStar::SearchNode(IntervalKey{-1, -1, -1}, g, g,
-                                               current.keyInterval,
-                                               IntervalKey{-1, -1, -1},
-                                               Vertex(-1, -1), Vertex(-1, -1),
-                                               finalWaypoints, true);
+            double g = 0.0;
+            for (size_t i = 1; i < finalWaypoints.size(); ++i)
+            {
+                g += heuristic(finalWaypoints[i - 1], finalWaypoints[i]);
+            }
+
+            KeyIntervalAStar::SearchNode targetNode = KeyIntervalAStar::SearchNode(std::nullopt, g, g,
+                                                                                   current.keyInterval,
+                                                                                   std::nullopt,
+                                                                                   std::nullopt, std::nullopt,
+                                                                                   finalWaypoints, true);
             return targetNode;
         }
 
-
-        logger::log_info("no up/down vertex found before transition vertex for target");
     }
 
     // 检查最后一个waypoint到target vertex之间是否还有关键点
-    Vertex lastWaypoint = current.waypoints.back();
+    checkAndAddUpDownVertex(target, current.waypoints.back(), finalWaypoints, current);
 
-    if(checkAndAddUpDownVertex(target, lastWaypoint, finalWaypoints, current))
+    finalWaypoints.push_back(target);
+
+    double g = 0.0;
+    for (size_t i = 1; i < finalWaypoints.size(); ++i)
     {
-        g += calculateHeuristicDistance(lastWaypoint, finalWaypoints.back());
+        g += heuristic(finalWaypoints[i - 1], finalWaypoints[i]);
     }
 
-    g += calculateHeuristicDistance(finalWaypoints.back(), target);
-    finalWaypoints.push_back(target);
     logger::log_info("final waypoints: " + logger::vectorToString(finalWaypoints));
 
-    KeyIntervalAStar::SearchNode targetNode(IntervalKey{-1, -1, -1}, g, g, current.keyInterval, IntervalKey{-1, -1, -1},
-                          current.upVertex, current.downVertex, finalWaypoints, true);
+    KeyIntervalAStar::SearchNode targetNode(std::nullopt, g, g, current.keyInterval, std::nullopt,
+                                            std::nullopt, std::nullopt, finalWaypoints, true);
     logger::log_info("push target node");
     return targetNode;
 }
@@ -502,42 +493,49 @@ std::pair<double, double> KeyIntervalAStar::calcGAndH(const std::vector<Vertex> 
     logger::log_info("calculate g and h for evaluation interval: " + std::to_string(evaluationInterval.y) + "," + std::to_string(evaluationInterval.start) + "," + std::to_string(evaluationInterval.end));
     logger::log_info("waypoints: " + logger::vectorToString(waypoints));
 
-    // 计算mustPassPoints中相邻点之间的代价
+    // 计算waypoints中相邻点之间的代价
     for (size_t i = 1; i < waypoints.size(); ++i)
     {
-        gValue += calculateHeuristicDistance(waypoints[i - 1], waypoints[i]);
+        gValue += heuristic(waypoints[i - 1], waypoints[i]);
+        logger::log_info("gValue += heuristic(" + std::to_string(waypoints[i - 1].x) + "," + std::to_string(waypoints[i - 1].y) + "," + std::to_string(waypoints[i].x) + "," + std::to_string(waypoints[i].y) + "): " + std::to_string(gValue));
     }
 
     // 计算最后一段的代价
-    if (!isVertexInKeyInterval(waypoints.back(), evaluationInterval))
+    if (!preprocess_->isVertexInKeyInterval(waypoints.back(), evaluationInterval))
     {
-        logger::log_info("calculate g and h with last waypoint not in current key interval: " + std::to_string(waypoints.back().x) + "," + std::to_string(waypoints.back().y));
-        // 否则根据目标vertex的位置计算代价
+        //  否则根据目标vertex的位置计算代价
         if (target.x <= evaluationInterval.start)
         {
             Vertex evaluationVertex = Vertex(evaluationInterval.start, evaluationInterval.y);
+            logger::log_info("evaluation vertex: " + std::to_string(evaluationVertex.x) + "," + std::to_string(evaluationVertex.y));
             // 如果目标x小于等于interval的start
-            gValue += calculateHeuristicDistance(waypoints.back(), evaluationVertex);
-            hValue = calculateHeuristicDistance(evaluationVertex, target);
+            gValue += heuristic(waypoints.back(), evaluationVertex);
+            hValue = heuristic(evaluationVertex, target);
         }
         else if (target.x >= evaluationInterval.end)
         {
             Vertex evaluationVertex = Vertex(evaluationInterval.end, evaluationInterval.y);
+            logger::log_info("evaluation vertex: " + std::to_string(evaluationVertex.x) + "," + std::to_string(evaluationVertex.y));
             // 如果目标x大于等于interval的end
-            gValue += calculateHeuristicDistance(waypoints.back(), evaluationVertex);
-            hValue = calculateHeuristicDistance(evaluationVertex, target);
+            gValue += heuristic(waypoints.back(), evaluationVertex);
+            hValue = heuristic(evaluationVertex, target);
         }
         else
         {
             Vertex evaluationVertex = Vertex(target.x, evaluationInterval.y);
+            logger::log_info("evaluation vertex: " + std::to_string(evaluationVertex.x) + "," + std::to_string(evaluationVertex.y));
             // 如果目标x在interval的范围内
-            gValue += calculateHeuristicDistance(waypoints.back(), evaluationVertex);
-            hValue = calculateHeuristicDistance(evaluationVertex, target);
+            gValue += heuristic(waypoints.back(), evaluationVertex);
+            hValue = heuristic(evaluationVertex, target);
         }
-    }else{
-        logger::log_info("calculate g and h with last waypoint in current key interval: " + std::to_string(waypoints.back().x) + "," + std::to_string(waypoints.back().y));
-        hValue = calculateHeuristicDistance(waypoints.back(), target);
     }
+    else
+    {
+        logger::log_info("calculate g and h with last waypoint in current key interval: " + std::to_string(waypoints.back().x) + "," + std::to_string(waypoints.back().y));
+        hValue = heuristic(waypoints.back(), target);
+    }
+
+    logger::log_info("gValue: " + std::to_string(gValue) + ", hValue: " + std::to_string(hValue));
 
     return std::make_pair(gValue, hValue);
 }
@@ -545,14 +543,14 @@ std::pair<double, double> KeyIntervalAStar::calcGAndH(const std::vector<Vertex> 
 std::vector<Vertex> KeyIntervalAStar::constructPath(std::vector<Vertex> waypoints) const
 {
     logger::log_info("construct path with waypoints: " + logger::vectorToString(waypoints));
-    // 使用mustPassPoints重建完整路径
+    //  使用waypoints重建完整路径
     std::vector<Vertex> path;
     if (waypoints.empty())
         return path;
-    const auto &grid = preprocess_.getGrid();
+    const auto &grid = preprocess_->getGrid();
     for (size_t i = 0; i < waypoints.size() - 1; ++i)
     {
-        // 调用A*算法获取两个mustPassPoint之间的路径，去除首点避免重复
+        // 调用A*算法获取两个waypoints之间的路径，去除首点避免重复
         Vertex start = waypoints[i];
         Vertex end = waypoints[i + 1];
 
@@ -583,9 +581,9 @@ std::vector<Vertex> KeyIntervalAStar::constructPath(std::vector<Vertex> waypoint
     return path;
 }
 
-void KeyIntervalAStar::insertNode(const SearchNode& node,
-                                 std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>>& openList,
-                                 std::unordered_map<IntervalKey, double, IntervalKeyHash>& gScore)
+void KeyIntervalAStar::insertNode(const SearchNode &node,
+                                  std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>> &openList,
+                                  std::unordered_map<IntervalKey, double, IntervalKeyHash> &gScore)
 {
     // 对于目标节点，直接插入到openList中，不进行g值比较
     if (node.isTarget)
@@ -593,54 +591,37 @@ void KeyIntervalAStar::insertNode(const SearchNode& node,
         openList.push(node);
         return;
     }
-    
+
     // 检查g值是否更优
-    if (gScore.find(node.keyInterval) == gScore.end() || node.g < gScore[node.keyInterval])
+    if (gScore.find(node.keyInterval.value()) == gScore.end() || node.g < gScore[node.keyInterval.value()])
     {
-        gScore[node.keyInterval] = node.g;
+        gScore[node.keyInterval.value()] = node.g;
         openList.push(node);
-        logger::log_info("push new node: " + std::to_string(node.keyInterval.y) + "," + std::to_string(node.keyInterval.start) + "," + std::to_string(node.keyInterval.end));
+        logger::log_info("push new node: " + std::to_string(node.keyInterval.value().y) + "," + std::to_string(node.keyInterval.value().start) + "," + std::to_string(node.keyInterval.value().end));
     }
 }
 
-bool KeyIntervalAStar::checkAndAddUpDownVertex(const Vertex& targetVertex, 
-                                              const Vertex& lastWaypoint,
-                                              std::vector<Vertex>& waypoints,
-                                              const SearchNode& current)
+bool KeyIntervalAStar::checkAndAddUpDownVertex(const Vertex &targetVertex,
+                                               const Vertex &lastWaypoint,
+                                               std::vector<Vertex> &waypoints,
+                                               const SearchNode &current)
 {
-    if (current.downVertex.x != -1 &&
-        targetVertex.x < current.downVertex.x &&
-        lastWaypoint.x < current.downVertex.x)
+    if (current.downVertex &&
+        targetVertex.x < current.downVertex.value().x &&
+        lastWaypoint.x < current.downVertex.value().x)
     {
-        waypoints.push_back(current.downVertex);
+        waypoints.push_back(current.downVertex.value());
+        logger::log_info("add down vertex: " + std::to_string(current.downVertex.value().x) + "," + std::to_string(current.downVertex.value().y));
         return true;
     }
 
-    if (current.upVertex.y != -1 &&
-        targetVertex.x > current.upVertex.x &&
-        lastWaypoint.x > current.upVertex.x)
+    if (current.upVertex &&
+        targetVertex.x > current.upVertex.value().x &&
+        lastWaypoint.x > current.upVertex.value().x)
     {
-        waypoints.push_back(current.upVertex);
+        waypoints.push_back(current.upVertex.value());
+        logger::log_info("add up vertex: " + std::to_string(current.upVertex.value().x) + "," + std::to_string(current.upVertex.value().y));
         return true;
     }
     return false;
-}
-
-std::optional<Vertex> KeyIntervalAStar::findTransitionVertex(const IntervalKey& keyInterval,
-                                                            const IntervalKey& directNeighbor1,
-                                                            const IntervalKey& directNeighbor2) const
-{
-    const auto &endKeyInterval = preprocess_.getKeyIntervals().at(keyInterval);
-    
-    auto it = endKeyInterval.transitionVertices.find(directNeighbor1);
-    if (it != endKeyInterval.transitionVertices.end())
-    {
-        auto it2 = it->second.find(directNeighbor2);
-        if (it2 != it->second.end())
-        {
-            return it2->second;
-        }
-    }
-    
-    return std::nullopt;
 }

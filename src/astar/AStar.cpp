@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <windows.h>
 
 namespace {
     const int MAX_SEARCH_TIME = 30;  // 最大搜索时间（秒）
@@ -23,6 +24,103 @@ namespace {
         std::reverse(path.begin(), path.end());
         return path;
     }
+}
+
+// AStar类的实现
+std::vector<Vertex> AStar::search(const Vertex& start, const Vertex& target) {
+    // 重置计数
+    expanded_nodes_ = 0;
+    search_time_ = 0.0;
+    
+    // 使用QueryPerformanceCounter计时
+    LARGE_INTEGER freq, t_start, t_end;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&t_start);
+
+    if(!utils::isPassable(grid_, start) || !utils::isPassable(grid_, target)) {
+        QueryPerformanceCounter(&t_end);
+        search_time_ = static_cast<double>(t_end.QuadPart - t_start.QuadPart) / freq.QuadPart;
+        return {};
+    }
+    
+    std::priority_queue<std::shared_ptr<AStarNode>, 
+                       std::vector<std::shared_ptr<AStarNode>>, 
+                       AStarNodeComparator> open_list;
+    std::unordered_map<Vertex, double> closed_list;
+
+    memory_before_ = memory_utils::get_current_memory_usage();
+
+    auto start_node = std::make_shared<AStarNode>(start, 0, heuristic(start, target));
+    open_list.push(start_node);
+
+    while (!open_list.empty()) {
+        // 检查是否超时
+        // auto current_time = std::chrono::steady_clock::now();
+        // auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
+        // if (elapsed >= MAX_SEARCH_TIME) {
+        //     logger::log_warning("A* search timed out after " + std::to_string(MAX_SEARCH_TIME) + " seconds");
+        //     auto end_time = std::chrono::steady_clock::now();
+        //     search_time_ = std::chrono::duration<double>(end_time - start_time).count();
+        //     return {};
+        // }
+
+        auto current = open_list.top();
+        open_list.pop();
+        
+        // 增加扩展节点计数
+        expanded_nodes_++;
+
+        if (current->pos == target) {
+            auto path = reconstruct_path(current);
+            QueryPerformanceCounter(&t_end);
+            search_time_ = static_cast<double>(t_end.QuadPart - t_start.QuadPart) / freq.QuadPart;
+            memory_after_ = memory_utils::get_current_memory_usage();
+            return path;
+        }
+
+        for (const auto& move : Action::MOVEMENTS_4) {
+            Vertex next_pos(current->pos.x + move.x, current->pos.y + move.y);
+
+            if (!utils::isWalkable(grid_, current->pos, next_pos)) {
+                continue;
+            }
+
+            double tentative_g;
+            // if (utils::isDiagonal(next_pos - current->pos)) {
+            //     tentative_g = current->g + std::sqrt(2.0);
+            // } else {
+                tentative_g = current->g + 1.0;
+            // }
+
+            if (closed_list.count(next_pos) && closed_list[next_pos] <= tentative_g) {
+                continue;
+            }
+
+            closed_list[next_pos] = tentative_g;
+
+            auto next_node = std::make_shared<AStarNode>(
+                next_pos, tentative_g, heuristic(next_pos, target), current);
+            
+            open_list.push(next_node);
+        }
+    }
+
+    QueryPerformanceCounter(&t_end);
+    search_time_ = static_cast<double>(t_end.QuadPart - t_start.QuadPart) / freq.QuadPart;
+    logger::log_info("No path found");
+    memory_after_ = memory_utils::get_current_memory_usage();
+    return {};
+}
+
+std::vector<Vertex> AStar::reconstruct_path(const std::shared_ptr<AStarNode>& goal_node) const {
+    std::vector<Vertex> path;
+    auto node = goal_node;
+    while (node) {
+        path.push_back(node->pos);
+        node = node->parent;
+    }
+    std::reverse(path.begin(), path.end());
+    return path;
 }
 
 std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
@@ -44,12 +142,12 @@ std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
 
     while (!open_list.empty()) {
         // 检查是否超时
-        auto current_time = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
-        if (elapsed >= MAX_SEARCH_TIME) {
-            logger::log_warning("A* search timed out after " + std::to_string(MAX_SEARCH_TIME) + " seconds");
-            return {};
-        }
+        // auto current_time = std::chrono::steady_clock::now();
+        // auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
+        // if (elapsed >= MAX_SEARCH_TIME) {
+        //     logger::log_warning("A* search timed out after " + std::to_string(MAX_SEARCH_TIME) + " seconds");
+        //     return {};
+        // }
 
         auto current = open_list.top();
         open_list.pop();
@@ -67,7 +165,7 @@ std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
             return path;
         }
 
-        for (const auto& move : Action::MOVEMENTS_9) {
+        for (const auto& move : Action::MOVEMENTS_4) {
             Vertex next_pos(current->pos.x + move.x, current->pos.y + move.y);
 
             if (!utils::isWalkable(grid, current->pos, next_pos)) {
@@ -75,11 +173,11 @@ std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
             }
 
             double tentative_g;
-            if (utils::isDiagonal(next_pos - current->pos)) {
-                tentative_g = current->g + std::sqrt(2.0);
-            } else {
+            // if (utils::isDiagonal(next_pos - current->pos)) {
+            //     tentative_g = current->g + std::sqrt(2.0);
+            // } else {
                 tentative_g = current->g + 1.0;
-            }
+            // }
 
             if (closed_list.count(next_pos) && closed_list[next_pos] <= tentative_g) {
                 continue;
@@ -99,7 +197,7 @@ std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
         }
     }
 
-    logger::log_info("No path found");
+    // logger::log_info("No path found");
     return {};
 }
 
@@ -164,4 +262,18 @@ std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
 
     logger::log_info("No path found");
     return {};
+}
+
+
+size_t AStar::getSearchMemoryIncrease() const {
+    if (memory_after_ >= memory_before_) {
+        return memory_after_ - memory_before_;
+    } else {
+        return 0;
+    }
+}
+
+void AStar::resetSearchMemoryUsage() {
+    memory_before_ = 0;
+    memory_after_ = 0;
 }

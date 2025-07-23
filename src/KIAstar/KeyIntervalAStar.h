@@ -7,6 +7,7 @@
 #include <optional>
 #include "../basic/Vertex.h"
 #include "../utilities/GridUtility.h"
+#include "../solver/SolverInterface.h"
 #include "Preprocess.h"
 
 using IntervalKey = Preprocess::IntervalKey;
@@ -15,24 +16,25 @@ using IntervalKeyHash = Preprocess::IntervalKeyHash;
 using VerticalInterval = Preprocess::VerticalInterval;
 using NeighborTriple = Preprocess::NeighborTriple;
 
-class KeyIntervalAStar {
+class KeyIntervalAStar : public SolverInterface {
 public:
     // 定义搜索节点结构
     struct SearchNode {
-        IntervalKey keyInterval;  // key interval的key
+        std::optional<IntervalKey> keyInterval;  // key interval的key
         double g;                 // 从起点到当前节点的代价
         double f;                 // 估计的总代价
-        IntervalKey parent;  // 父节点的key
-        IntervalKey fromDirectNeighbor;  // 当前直接邻居的key
-        Vertex upVertex;          // 记录y值最小的direction为up的key point
-        Vertex downVertex;        // 记录y值最大的direction为up的key point
+        std::optional<IntervalKey> parent;  // 父节点的key
+        std::optional<IntervalKey> fromDirectNeighbor;  // 当前直接邻居的key
+        std::optional<Vertex> upVertex;          // 记录y值最小的direction为up的key point
+        std::optional<Vertex> downVertex;        // 记录y值最大的direction为down的key point
         std::vector<Vertex> waypoints;  // 必须经过的点集合
         bool isTarget;              // 是否到达终点
 
-        SearchNode(const IntervalKey& key, double g_val, double f_val, 
-                  const IntervalKey& p,
-                  const IntervalKey& fromDirectNeighbor,
-                  const Vertex& up, const Vertex& down,
+        SearchNode(const std::optional<IntervalKey>& key, double g_val, double f_val, 
+                  const std::optional<IntervalKey>& p,
+                  const std::optional<IntervalKey>& fromDirectNeighbor,
+                  const std::optional<Vertex>& up,
+                  const std::optional<Vertex>& down,
                   const std::vector<Vertex>& waypoints,
                   bool is_end = false)
             : keyInterval(key), g(g_val), f(f_val), parent(p),
@@ -42,62 +44,57 @@ public:
 
         // 用于优先队列的比较
         bool operator>(const SearchNode& other) const {
+            if (f == other.f) {
+                return g < other.g;
+            }
             return f > other.f;
         }
     };
-
-    enum class ReachabilityResult {
-        UNREACHABLE,
-        DIRECT_PATH,
-        DONE
-    };
     
-    struct NearestKeyIntervalsResult {
-        ReachabilityResult result;
-        std::unordered_map<IntervalKey, IntervalKey, IntervalKeyHash> startIntervals;  // key: key interval, value: direct neighbor
-        std::unordered_map<IntervalKey, IntervalKey, IntervalKeyHash> targetIntervals; // key: key interval, value: direct neighbor
+    struct KeyIntervalQueryResult {
+        bool directlyReachable;
+        std::optional<IntervalKey> startK;    // 起点所在的关键区间
+        std::optional<IntervalKey> targetK;   // 终点所在的关键区间
+        std::optional<std::pair<IntervalKey, IntervalKey>> startLeft;
+        std::optional<std::pair<IntervalKey, IntervalKey>> startRight;
+        std::optional<std::pair<IntervalKey, IntervalKey>> targetLeft;
+        std::optional<std::pair<IntervalKey, IntervalKey>> targetRight;
     };
 
+    
+    
     // 构造函数
-    KeyIntervalAStar(const Preprocess& preprocess);
+    KeyIntervalAStar(const Preprocess& preprocess, const std::string& name = "KeyIntervalAStar");
+    // 新增：默认构造函数，用于延迟初始化
+    KeyIntervalAStar(const std::string& name = "KeyIntervalAStar");
 
-    // 执行搜索
-    std::vector<Vertex> search(const Vertex& start, const Vertex& end);
+    // 实现SolverInterface接口
+    std::vector<Vertex> search(const Vertex& start, const Vertex& target) override;
+    std::string get_name() const override { return name_; }
+    int getExpandedNodes() const override { return expanded_nodes_; }
+    void resetExpandedNodes() override { expanded_nodes_ = 0; }
+    double getSearchTime() const override { return search_time_; }
+    void resetSearchTime() override { search_time_ = 0.0; }
+    
+    // 实现内存监控接口
+    size_t getPreprocessMemoryUsage() const override { return preprocess_memory_usage_; }
+    size_t getSearchMemoryIncrease() const override { return search_memory_increase_; }
+    void resetSearchMemoryUsage() override { search_memory_increase_ = 0; }
+    // 实现预处理时间接口
+    double getPreprocessTime() const override { return preprocess_time_; }
+    
+    // 实现预处理接口
+    void preprocess(const std::vector<std::vector<int>>& grid) override;
 
 private:
-    const Preprocess& preprocess_;  // 预处理结果
-
-    // 计算两点之间的启发式距离
-    double calculateHeuristicDistance(const Vertex& v1, const Vertex& v2) const {
-        return std::abs(v1.x - v2.x) + std::abs(v1.y - v2.y);
-    }
-
-    // 查找起点和终点的key intervals
-    NearestKeyIntervalsResult findNearestKeyIntervals(const Vertex& start, const Vertex& target);
-
-    // 查找包含vertex的vertical interval
-    std::optional<VerticalInterval> findContainingVerticalInterval(const Vertex& vertex) const;
-
-    // 处理邻居链
-    std::pair<KeyIntervalAStar::ReachabilityResult, std::unordered_map<IntervalKey, IntervalKey, IntervalKeyHash>> processNeighborChains(const VerticalInterval& interval,
-                                                                 const Vertex& vertex,
-                                                                 const Vertex& target,
-                                                                 bool isStart) const;
-    
-    // 新增：安全的vertical interval访问
-    std::optional<VerticalInterval> getVerticalInterval(const IntervalKey& key) const;
-
-    // 处理邻居链查找key interval（统一版本）
-    // 返回值：true表示找到了target vertex，false表示继续寻找key interval
-    bool processNeighborChain(const IntervalKey& currentKey,
-                                   const Vertex& vertex,
-                                   const Vertex& target,
-                                   bool isStart,
-                                   std::unordered_map<IntervalKey, IntervalKey, IntervalKeyHash>& keyIntervals,
-                                   bool isLeftDirection) const;
-
-    // 检查vertex是否在某个key interval中
-    bool isVertexInKeyInterval(const Vertex& vertex, const IntervalKey& key) const;
+    const Preprocess* preprocess_;  // 改为指针，支持延迟初始化
+    std::string name_;              // 算法名称
+    int expanded_nodes_ = 0;        // 扩展节点计数
+    double search_time_ = 0.0;      // 搜索时间
+    size_t preprocess_memory_usage_ = 0;  // 预处理占用的内存（字节）
+    size_t search_memory_increase_ = 0;   // 搜索过程中增加的内存（字节）
+    double preprocess_time_ = 0.0;        // 预处理时间（秒）
+    std::unique_ptr<Preprocess> preprocess_ptr_; // 拥有Preprocess对象
 
     // 计算g值和h值
     std::pair<double, double> calcGAndH(const std::vector<Vertex>& mustPassPoints,
@@ -107,10 +104,19 @@ private:
     // 构建最终路径
     std::vector<Vertex> constructPath(std::vector<Vertex> waypoints) const;
 
+        // 处理终点key intervals
+    bool handleTargetKeyIntervals(const SearchNode& current, const Vertex& target,
+                                const KeyIntervalQueryResult& queryResult,
+                                std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>>& openList,
+                                std::unordered_map<IntervalKey, double, IntervalKeyHash>& gScore);
+
     // 处理终点key interval
     SearchNode handleTargetKeyInterval(const SearchNode& current,
                                 const IntervalKey& targetFromDirectNeighbor,
                                 const Vertex& target);
+
+    // 查询key intervals
+    KeyIntervalQueryResult queryKeyIntervals(const Vertex& start, const Vertex& target) const;
 
     // 处理邻居节点
     SearchNode handleNeighbor(const SearchNode& current,
@@ -139,9 +145,11 @@ private:
                                 std::vector<Vertex>& waypoints,
                                 const SearchNode& current);
 
-    // 寻找transition vertex
-    std::optional<Vertex> findTransitionVertex(const IntervalKey& keyInterval,
-                                              const IntervalKey& directNeighbor1,
-                                              const IntervalKey& directNeighbor2) const;
+    // 初始化起点节点
+    void initializeStartNode(const Vertex& start, const Vertex& target,
+                           const KeyIntervalQueryResult& queryResult,
+                           std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>>& openList,
+                           std::unordered_map<IntervalKey, double, IntervalKeyHash>& gScore);
 
+    
 }; 

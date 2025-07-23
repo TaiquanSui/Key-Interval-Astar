@@ -47,6 +47,13 @@ namespace Action {
         Vertex(0, 0)    // WAIT
     };
 
+    const std::vector<Vertex> MOVEMENTS_4 = {
+        Vertex(1, 0),   // SOUTH
+        Vertex(0, 1),   // EAST
+        Vertex(-1, 0),  // NORTH
+        Vertex(0, -1),  // WEST
+    };
+
     const std::unordered_map<Move, Vertex> MOVEMENT_MAP = {
         {Move::MOVE_N,  Vertex(-1, 0)},  // NORTH
         {Move::MOVE_E,  Vertex(0, 1)},   // EAST

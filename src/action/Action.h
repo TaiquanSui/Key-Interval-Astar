@@ -24,6 +24,7 @@ namespace Action {
     extern const std::vector<Vertex> DIRECTIONS_DIAGONAL;
     extern const std::vector<Vertex> MOVEMENTS_9;
     extern const std::vector<Vertex> MOVEMENTS_5;
+    extern const std::vector<Vertex> MOVEMENTS_4;
     extern const std::unordered_map<Move, Vertex> MOVEMENT_MAP;  // Direction map
 }
 

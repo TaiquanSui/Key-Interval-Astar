@@ -1,22 +1,27 @@
 #include "BenchmarkUtils.h"
-#include "../src/cbs/CBS.h"
-#include "../src/jpscbs/JPSCBS.h"
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 int main() {
     try {
-        // 创建算法实例
-        auto cbs = std::make_unique<CBS>(true);  // Enable optimization
-        auto jpscbs = std::make_unique<JPSCBS>();
+        logger::log_info("start Key Interval A* benchmark");
         
-        // 运行所有场景的比较测试
-        BenchmarkUtils::benchmark_all_scenarios_comparison(
-            cbs.get(),
-            jpscbs.get()
-        );
+        // 创建solver（不需要预先预处理）
+        auto solver = std::make_unique<KeyIntervalAStar>();
+        // auto solver = std::make_unique<HPAStar>();
+        // auto solver = std::make_unique<AStar>();
+
+        
+        // 运行所有场景的测试（每个地图会自动进行预处理）
+        BenchmarkUtils::run_all_scenarios_test(solver.get());
+        
+        logger::log_info("benchmark finished");
         
     } catch (const std::exception& e) {
-        logger::log_error(e.what());
+        logger::log_error("Exception in main: " + std::string(e.what()));
         return 1;
     }
+    
     return 0;
 } 

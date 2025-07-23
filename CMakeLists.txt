@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.14)
 project(CBS_Localized_Conflict_Resolution)
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
+endif()
+
 # 编译选项
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,18 +35,9 @@ file(GLOB_RECURSE PROJECT_SOURCES
     "src/*.h"
     "data_loader/*.cpp"
     "data_loader/*.h"
-#    "benchmark/*.cpp"
-#    "benchmark/*.h"
+    "benchmark/*.cpp"
+    "benchmark/*.h"
 )
-
-# 只排除具体的benchmark可执行文件源文件
-#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/CBSBenchmark\\.cpp$")
-#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/JPSCBSBenchmark\\.cpp$")
-#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/Benchmark\\.cpp$")
-#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/CBSSingleTest\\.cpp$")
-#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/JPSCBSSingleTest\\.cpp$")
-#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/GenerateComparisonSummary\\.cpp$")
-#list(FILTER PROJECT_SOURCES EXCLUDE REGEX ".*/GenerateOverallStatistics\\.cpp$")
 
 # 创建库
 add_library(project_lib ${PROJECT_SOURCES})
@@ -68,4 +63,10 @@ gtest_discover_tests(preprocess_test)
 gtest_discover_tests(preprocess_detailed_test)
 gtest_discover_tests(key_interval_astar_test)
 
+# 添加Key Interval A* benchmark可执行文件
+add_executable(single_test benchmark/SingleTest.cpp)
+target_link_libraries(single_test PRIVATE project_lib)
+
+add_executable(benchmark benchmark/Benchmark.cpp)
+target_link_libraries(benchmark PRIVATE project_lib)
 

@@ -33,11 +33,11 @@ std::vector<std::vector<int>> load_map(const std::string& filename) {
         throw std::runtime_error("地图尺寸无效");
     }
 
-    // 交换width和height，颠倒x和y坐标
-    std::swap(width, height);
+    // 不再交换width和height
+    // std::swap(width, height);
 
-    // 读取地图内容 - 创建一个转置后的地图
-    std::vector<std::vector<int>> map(width, std::vector<int>(height, 0));
+    // 读取地图内容 - 按正常顺序创建地图
+    std::vector<std::vector<int>> map(height, std::vector<int>(width, 0));
     int row = 0;
     int col = 0;
     char c;
@@ -53,16 +53,16 @@ std::vector<std::vector<int>> load_map(const std::string& filename) {
         switch(c) {
             case '.':
             case 'G':
-                map[col][row] = 0;  // 可通行，注意这里交换了row和col
+                map[row][col] = 0;  // 可通行
                 break;
             case '@':
             case 'O':
             case 'T':
-                map[col][row] = 1;  // 不可通行，注意这里交换了row和col
+                map[row][col] = 1;  // 不可通行
                 break;
             // case 'S':
             // case 'W':
-            //     map[col][row] = 0;  // 暂时视为可通行，注意这里交换了row和col
+            //     map[row][col] = 0;  // 暂时视为可通行
             //     break;
             default:
                 throw std::runtime_error("地图包含未知字符: " + std::string(1, c));
@@ -113,8 +113,8 @@ std::vector<Agent> load_scen(const std::string& filename, const std::vector<std:
 
         agents.emplace_back(
             agent_id++,
-            Vertex(start_x, start_y),
-            Vertex(goal_x, goal_y)
+            Vertex(start_y, start_x),
+            Vertex(goal_y, goal_x)
         );
     }
 

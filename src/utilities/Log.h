@@ -13,7 +13,7 @@ namespace logger {
     enum class LogLevel {
         INFO,
         WARNING,
-        ERROR
+        ERR
     };
 
     // Log function
@@ -25,7 +25,7 @@ namespace logger {
             case LogLevel::WARNING:
                 std::cout << "\033[33m[WARNING] " << message << "\033[0m" << std::endl;
                 break;
-            case LogLevel::ERROR:
+            case LogLevel::ERR:
                 std::cout << "\033[31m[ERROR] " << message << "\033[0m" << std::endl;
                 break;
         }
@@ -41,7 +41,7 @@ namespace logger {
     }
 
     inline void log_error(const std::string& message) {
-        log(LogLevel::ERROR, message);
+        log(LogLevel::ERR, message);
     }
 
     // Convert vector to string representation

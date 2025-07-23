@@ -103,8 +103,8 @@ TEST_F(PreprocessTest, FindKeyInterval) {
     
     // 测试查找存在的key interval
     for (const auto& [key, interval] : keyIntervals) {
-        const auto* found = preprocess.findKeyInterval(key);
-        EXPECT_NE(found, nullptr);
+        auto found = preprocess.findKeyInterval(key);
+        EXPECT_TRUE(found.has_value());
         EXPECT_EQ(found->getY(), interval.getY());
         EXPECT_EQ(found->getStart(), interval.getStart());
         EXPECT_EQ(found->getEnd(), interval.getEnd());
@@ -112,8 +112,8 @@ TEST_F(PreprocessTest, FindKeyInterval) {
     
     // 测试查找不存在的key interval
     Preprocess::IntervalKey nonExistentKey{999, 999, 999};
-    const auto* notFound = preprocess.findKeyInterval(nonExistentKey);
-    EXPECT_EQ(notFound, nullptr);
+    auto notFound = preprocess.findKeyInterval(nonExistentKey);
+    EXPECT_FALSE(notFound.has_value());
 }
 
 
@@ -122,28 +122,28 @@ TEST_F(PreprocessTest, KeyPointExtraction) {
     Preprocess preprocess(simpleMap);
     preprocess.preprocess();
     
-    const auto* interval1 = preprocess.findKeyInterval({4,0,2});
-    const auto* interval2 = preprocess.findKeyInterval({4,5,7});
-    const auto* interval3 = preprocess.findKeyInterval({2,0,7});
-    const auto* interval4 = preprocess.findKeyInterval({5,0,7});
+    auto interval1 = preprocess.findKeyInterval(Preprocess::IntervalKey{4,0,2});
+    auto interval2 = preprocess.findKeyInterval(Preprocess::IntervalKey{4,5,7});
+    auto interval3 = preprocess.findKeyInterval(Preprocess::IntervalKey{2,0,7});
+    auto interval4 = preprocess.findKeyInterval(Preprocess::IntervalKey{5,0,7});
     
     // 只测试存在的interval
-    if (interval1 != nullptr) {
-        EXPECT_GT(interval1->getVerticalKeyPoints().size(), 0);
+    if (interval1.has_value()) {
+        EXPECT_TRUE(interval1->getUpVertex().has_value() || interval1->getDownVertex().has_value());
     }else{
         EXPECT_TRUE(false);
     }
-    if (interval2 != nullptr) {
-        EXPECT_GT(interval2->getVerticalKeyPoints().size(), 0);
+    if (interval2.has_value()) {
+        EXPECT_TRUE(interval2->getUpVertex().has_value() || interval2->getDownVertex().has_value());
     }else{
         EXPECT_TRUE(false);
     }
-    if (interval3 != nullptr) {
+    if (interval3.has_value()) {
         EXPECT_GT(interval3->getHorizontalKeyPoints().size(), 0);
     }else{
         EXPECT_TRUE(false);
     }
-    if (interval4 != nullptr) {
+    if (interval4.has_value()) {
         EXPECT_GT(interval4->getHorizontalKeyPoints().size(), 0);
     }else{
         EXPECT_TRUE(false);
@@ -155,16 +155,16 @@ TEST_F(PreprocessTest, NeighborRelations) {
     Preprocess preprocess(simpleMap);
     preprocess.preprocess();
     
-    const auto* interval1 = preprocess.findKeyInterval({4,0,2});
-    const auto* interval2 = preprocess.findKeyInterval({4,5,7});
+    auto interval1 = preprocess.findKeyInterval(Preprocess::IntervalKey{4,0,2});
+    auto interval2 = preprocess.findKeyInterval(Preprocess::IntervalKey{4,5,7});
     
     // 只测试存在的interval
-    if (interval1 != nullptr) {
+    if (interval1.has_value()) {
         EXPECT_GT(interval1->neighbors.size(), 0);
     }else{
         EXPECT_TRUE(false);
     }
-    if (interval2 != nullptr) {
+    if (interval2.has_value()) {
         EXPECT_GT(interval2->neighbors.size(), 0);
     }else{
         EXPECT_TRUE(false);
@@ -176,11 +176,11 @@ TEST_F(PreprocessTest, TransitionVertices) {
     Preprocess preprocess(simpleMap);
     preprocess.preprocess();
     
-    const auto* interval1 = preprocess.findKeyInterval({2,0,7});
-    const auto* interval2 = preprocess.findKeyInterval({5,0,7});
+    auto interval1 = preprocess.findKeyInterval(Preprocess::IntervalKey{2,0,7});
+    auto interval2 = preprocess.findKeyInterval(Preprocess::IntervalKey{5,0,7});
     
-    EXPECT_NE(interval1, nullptr);
-    EXPECT_NE(interval2, nullptr);
+    EXPECT_TRUE(interval1.has_value());
+    EXPECT_TRUE(interval2.has_value());
     
     Preprocess::IntervalKey key1{4,0,2};
     Preprocess::IntervalKey key2{4,5,7};

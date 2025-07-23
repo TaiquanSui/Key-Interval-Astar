@@ -4,6 +4,7 @@
 #include <functional>
 
 struct Vertex {
+    // x为行坐标，y为列坐标
     int x, y;
 
     explicit Vertex(int x = 0, int y = 0) : x(x), y(y) {}

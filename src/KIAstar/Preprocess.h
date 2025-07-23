@@ -5,8 +5,10 @@
 #include <map>
 #include <unordered_map>
 #include <iostream>
+#include <optional>
 #include "../basic/Vertex.h"
 #include "../utilities/GridUtility.h"
+
 
 class Preprocess {
 public:
@@ -28,10 +30,10 @@ public:
 
     // 定义关键点方向
     enum class Direction {
-        UP = 0,     // 从上方经过
-        DOWN = 1,   // 从下方经过
-        LEFT = 2,   // 从左侧经过
-        RIGHT = 3   // 从右侧经过
+        UP = 0,     // 可从上方经过
+        DOWN = 1,   // 可从下方经过
+        LEFT = 2,   // 可从左侧经过
+        RIGHT = 3   // 可从右侧经过
     };
 
     // 定义关键点结构
@@ -82,8 +84,6 @@ public:
         }
     };
 
-
-
     // 定义hash函数
     struct IntervalKeyHash {
         size_t operator()(const IntervalKey& key) const {
@@ -98,22 +98,25 @@ public:
         int y;              // y坐标
         int start;          // x坐标起点
         int end;            // x坐标终点
-        std::set<KeyPoint> horizontalKeyPoints;  // 水平方向的关键点（LEFT/RIGHT）
-        std::set<KeyPoint> verticalKeyPoints;    // 垂直方向的关键点（UP/DOWN）
-        std::set<IntervalKey> leftNeighbors;     // 左侧邻居
-        std::set<IntervalKey> rightNeighbors;    // 右侧邻居
+        std::optional<Vertex> upVertex;             // 垂直方向up关键点
+        std::optional<Vertex> downVertex;           // 垂直方向down关键点
+        std::vector<KeyPoint> horizontalKeyPoints;  // 水平方向的关键点（LEFT/RIGHT）
+        std::vector<IntervalKey> leftNeighbors;     // 左侧邻居
+        std::vector<IntervalKey> rightNeighbors;    // 右侧邻居
+        std::optional<std::pair<IntervalKey, IntervalKey>> leftKeyInterval;   // (key interval, key interval direct neighbor)
+        std::optional<std::pair<IntervalKey, IntervalKey>> rightKeyInterval;  // (key interval, key interval direct neighbor)
         
         // 带参数的构造函数
         VerticalInterval(int y_pos, int s, int e) : 
             y(y_pos), start(s), end(e) {}
 
-        VerticalInterval() = default;
+        VerticalInterval() : y(0), start(0), end(0) {}
     };
 
     // 定义邻居三元组结构
     struct NeighborTriple {
         IntervalKey currentDirectNeighbor;    // 当前interval的直接邻居
-        IntervalKey neighborDirectNeighbor;       // 到达邻居key interval的直接邻居（遍历链中的上一个）
+        IntervalKey neighborDirectNeighbor;       // 到达邻居key interval的直接邻居
         IntervalKey neighborKeyInterval;      // 邻居key interval
         
         NeighborTriple(const IntervalKey& current, const IntervalKey& path, const IntervalKey& neighbor)
@@ -145,8 +148,9 @@ public:
         int getY() const { return verticalInterval->y; }
         int getStart() const { return verticalInterval->start; }
         int getEnd() const { return verticalInterval->end; }
-        const std::set<KeyPoint>& getHorizontalKeyPoints() const { return verticalInterval->horizontalKeyPoints; }
-        const std::set<KeyPoint>& getVerticalKeyPoints() const { return verticalInterval->verticalKeyPoints; }
+        const std::vector<KeyPoint>& getHorizontalKeyPoints() const { return verticalInterval->horizontalKeyPoints; }
+        std::optional<Vertex> getUpVertex() const { return verticalInterval->upVertex; }
+        std::optional<Vertex> getDownVertex() const { return verticalInterval->downVertex; }
     };
 
     // 构造函数
@@ -154,6 +158,7 @@ public:
 
     // 执行预处理
     void preprocess();
+    double getPreprocessTime() const { return preprocess_time_; }
 
     // 获取地图尺寸
     int getWidth() const { return width_; }
@@ -170,10 +175,28 @@ public:
     }
 
     // 根据key查找KeyInterval
-    const KeyInterval* findKeyInterval(const IntervalKey& key) const {
+    const std::optional<KeyInterval> findKeyInterval(const IntervalKey& key) const {
         auto it = keyIntervals_.find(key);
-        return it != keyIntervals_.end() ? &(it->second) : nullptr;
+        return it != keyIntervals_.end() ? std::optional<KeyInterval>(it->second) : std::nullopt;
     }
+
+    const std::optional<KeyInterval> findKeyInterval(const VerticalInterval& interval) const {
+        for(const auto& [_, keyInterval] : keyIntervals_) {
+            if(keyInterval.verticalInterval == &interval) {
+                return std::optional<KeyInterval>(keyInterval);
+            }
+        }
+        return std::nullopt;
+    }
+
+    // 查找包含vertex的vertical interval
+    std::optional<VerticalInterval> findContainingVerticalInterval(const Vertex& vertex) const;
+    // 判断vertex是否在某个key interval中
+    static bool isVertexInKeyInterval(const Vertex& vertex, const IntervalKey& key);
+    // 寻找transition vertex
+    std::optional<Vertex> findTransitionVertex(const IntervalKey& keyInterval,
+                                              const IntervalKey& directNeighbor1,
+                                              const IntervalKey& directNeighbor2) const;
 
     // 通用扫描方法
     void processScan(bool isVertical);
@@ -184,17 +207,20 @@ public:
 
     // 处理邻居关系
     void processNeighborPair(const IntervalKey& key,
-                           const std::set<IntervalKey>& directNeighbors,
+                           const std::vector<IntervalKey>& directNeighbors,
                            Direction dir);
 
     // 处理transition vertices
     void processTransitionVertices(const IntervalKey& key,
                             const VerticalInterval& currentInterval,
-                            const std::set<IntervalKey>& directNeighbors,
+                            const std::vector<IntervalKey>& directNeighbors,
                                     Direction dir);
 
     // 获取地图数据
     const std::vector<std::vector<int>>& getGrid() const { return grid_; }
+    
+    // 获取预处理占用的内存（字节）
+    size_t getMemoryUsage() const;
 
 private:
     // 地图数据
@@ -208,6 +234,8 @@ private:
     
     // 存储所有key interval（使用hashmap）
     std::unordered_map<IntervalKey, KeyInterval, IntervalKeyHash> keyIntervals_;
+
+    double preprocess_time_ = 0.0;
 
     // 获取最大可移动空间
     void getMaxMovableSpace(int fixed, int range, bool isVertical, std::vector<Interval>& intervals) const;
