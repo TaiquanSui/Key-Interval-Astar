@@ -12,7 +12,7 @@
 #include <windows.h>
 
 namespace {
-    const int MAX_SEARCH_TIME = 30;  // 最大搜索时间（秒）
+    const int MAX_SEARCH_TIME = 30;  // maximum search time (seconds)
     
     std::vector<Vertex> reconstruct_path(const std::shared_ptr<AStarNode>& goal_node) {
         std::vector<Vertex> path;
@@ -26,13 +26,13 @@ namespace {
     }
 }
 
-// AStar类的实现
+// implementation of AStar class
 std::vector<Vertex> AStar::search(const Vertex& start, const Vertex& target) {
-    // 重置计数
+    // reset count
     expanded_nodes_ = 0;
     search_time_ = 0.0;
     
-    // 使用QueryPerformanceCounter计时
+    // use QueryPerformanceCounter to measure time
     LARGE_INTEGER freq, t_start, t_end;
     QueryPerformanceFrequency(&freq);
     QueryPerformanceCounter(&t_start);
@@ -54,7 +54,7 @@ std::vector<Vertex> AStar::search(const Vertex& start, const Vertex& target) {
     open_list.push(start_node);
 
     while (!open_list.empty()) {
-        // 检查是否超时
+        // check if timeout
         // auto current_time = std::chrono::steady_clock::now();
         // auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
         // if (elapsed >= MAX_SEARCH_TIME) {
@@ -67,7 +67,7 @@ std::vector<Vertex> AStar::search(const Vertex& start, const Vertex& target) {
         auto current = open_list.top();
         open_list.pop();
         
-        // 增加扩展节点计数
+        // increase expanded node count
         expanded_nodes_++;
 
         if (current->pos == target) {
@@ -125,7 +125,7 @@ std::vector<Vertex> AStar::reconstruct_path(const std::shared_ptr<AStarNode>& go
 
 std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
                           const std::vector<std::vector<int>>& grid) {
-    // 记录开始时间
+    // record start time
     auto start_time = std::chrono::steady_clock::now();
 
     if(!utils::isPassable(grid, start) || !utils::isPassable(grid, goal)) {
@@ -142,7 +142,7 @@ std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
     open_list.push(start_node);
 
     while (!open_list.empty()) {
-        // 检查是否超时
+        // check if timeout
         // auto current_time = std::chrono::steady_clock::now();
         // auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
         // if (elapsed >= MAX_SEARCH_TIME) {
@@ -202,7 +202,7 @@ std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
     return {};
 }
 
-// 支持自定义方向的A*搜索
+// A* search with custom directions
 std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
                           const std::vector<std::vector<int>>& grid,
                           const std::vector<Vertex>& directions) {
@@ -279,7 +279,7 @@ void AStar::resetSearchMemoryUsage() {
     memory_after_ = 0;
 }
 
-// 新增：支持边界限制的A*搜索
+// new: A* search with boundary restriction
 std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
                           const std::vector<std::vector<int>>& grid,
                           const Vertex& top_left, const Vertex& bottom_right) {
@@ -289,7 +289,7 @@ std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
         return {};
     }
     
-    // 检查起点和终点是否在指定边界内
+    // check if start and goal are within specified boundary
     if (start.x < top_left.x || start.x > bottom_right.x || 
         start.y < top_left.y || start.y > bottom_right.y ||
         goal.x < top_left.x || goal.x > bottom_right.x || 
@@ -324,7 +324,7 @@ std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
         for (const auto& move : Action::MOVEMENTS_4) {
             Vertex next_pos(current->pos.x + move.x, current->pos.y + move.y);
 
-            // 检查是否在边界内
+            // check if within boundary
             if (next_pos.x < top_left.x || next_pos.x > bottom_right.x || 
                 next_pos.y < top_left.y || next_pos.y > bottom_right.y) {
                 continue;

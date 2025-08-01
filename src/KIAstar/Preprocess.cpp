@@ -11,14 +11,14 @@ Preprocess::Preprocess(const std::vector<std::vector<int>>& grid)
 
 void Preprocess::preprocess() {
     auto start = std::chrono::steady_clock::now();
-    // 处理垂直扫描
+    // process vertical scan
     processScan(true);
-    // 处理水平扫描
+    // process horizontal scan
     processScan(false);
     
-    // 构建key interval
+    // build key interval
     buildKeyIntervals();
-    // 构建邻居关系
+    // build neighbor relations
     buildNeighbors();
     auto end = std::chrono::steady_clock::now();
     preprocess_time_ = std::chrono::duration<double>(end - start).count();
@@ -34,23 +34,23 @@ void Preprocess::processScan(bool isVertical) {
     int scanRange = isVertical ? width_ : height_;
     int fixedRange = isVertical ? height_ : width_;
     
-    // 扫描收集关键点
+    // scan to collect key points
     for (int fixed = 0; fixed < scanRange; ++fixed) {
-        // 获取当前行/列的区间
+        // get current row/column interval
         if(fixed == 0) {
             getMaxMovableSpace(fixed, fixedRange, isVertical, currentIntervals);
         }
         
-        // 获取下一行/列的区间
+        // get next row/column interval
         std::vector<Interval> nextIntervals;
         if(fixed + 1 < scanRange) {
             getMaxMovableSpace(fixed + 1, fixedRange, isVertical, nextIntervals);
         }
         
-        // 处理当前行/列
+        // process current row/column
         processCurrentIntervals(prevIntervals, currentIntervals, nextIntervals, isVertical, fixed);
         
-        // 更新区间
+        // update intervals
         prevIntervals = currentIntervals;
         currentIntervals = nextIntervals;
     }
@@ -63,7 +63,7 @@ void Preprocess::processCurrentIntervals(std::vector<Interval>& prevIntervals,
                                     std::vector<Interval>& nextIntervals, bool isVertical, int fixed) {
                                         
     for (size_t i = 0; i < currentIntervals.size(); ++i) {
-        // 找到与当前区间连通的前一列区间
+        // find previous column interval connected to current interval
         if(isVertical) {
             verticalIntervals_[fixed][currentIntervals[i].start] = VerticalInterval(fixed, currentIntervals[i].start, currentIntervals[i].end);
             //logger::log_info("create verticalInterval: [" + std::to_string(verticalIntervals_[fixed][currentIntervals[i].start].y) + ", " + std::to_string(verticalIntervals_[fixed][currentIntervals[i].start].start) + ", " + std::to_string(verticalIntervals_[fixed][currentIntervals[i].start].end) + "]");
@@ -75,7 +75,7 @@ void Preprocess::processCurrentIntervals(std::vector<Interval>& prevIntervals,
                 currentIntervals[i].end >= prevInterval.start) {
                 prevConnectedIntervals.push_back(prevInterval);
                 if(isVertical) {
-                    // 添加邻居关系（只在不是第一列时）
+                    // add neighbor relation (only when not first column)
                     if (verticalIntervals_.find(fixed-1) == verticalIntervals_.end() || 
                         verticalIntervals_[fixed-1].find(prevInterval.start) == verticalIntervals_[fixed-1].end()) {
                             continue;
@@ -108,13 +108,13 @@ void Preprocess::processCurrentIntervals(std::vector<Interval>& prevIntervals,
         }
 
         if (!prevConnectedIntervals.empty()) {
-            // 由于区间是按顺序排列的，直接使用第一个和最后一个区间
+            // since intervals are ordered, use first and last interval
             int minStart = prevConnectedIntervals.front().start;
             int maxEnd = prevConnectedIntervals.back().end;
             Trend prevStartTrend = prevConnectedIntervals.front().start_mark;
             Trend prevEndTrend = prevConnectedIntervals.back().end_mark;
 
-            // 更新start趋势
+            // update start trend
             if (currentIntervals[i].start > minStart) {
                 currentIntervals[i].start_mark = Trend::DECREASING;
             } else if (currentIntervals[i].start < minStart) {
@@ -123,7 +123,7 @@ void Preprocess::processCurrentIntervals(std::vector<Interval>& prevIntervals,
                 currentIntervals[i].start_mark = prevStartTrend;
             }
 
-            // 更新end趋势
+            // update end trend
             if (currentIntervals[i].end > maxEnd) {
                 currentIntervals[i].end_mark = Trend::INCREASING;
             } else if (currentIntervals[i].end < maxEnd) {
@@ -132,7 +132,7 @@ void Preprocess::processCurrentIntervals(std::vector<Interval>& prevIntervals,
                 currentIntervals[i].end_mark = prevEndTrend;
             }
         } else {
-            // 如果没有连通区间，保持UNCHANGED
+            // if no connected interval, keep UNCHANGED
             currentIntervals[i].start_mark = Trend::UNCHANGED;
             currentIntervals[i].end_mark = Trend::UNCHANGED;
         }
@@ -149,10 +149,10 @@ void Preprocess::processCurrentIntervals(std::vector<Interval>& prevIntervals,
 
             if(currentIntervals[i].start_mark == Trend::DECREASING && currentIntervals[i].start > minStart) {
                 if(isVertical) {
-                    // 只添加关键点，VerticalInterval已经在updateIntervalTrends中创建
+                    // only add key point, VerticalInterval already created in updateIntervalTrends
                     Vertex keyPoint(currentIntervals[i].start,fixed);
                     //logger::log_info("processKeyPoint: keyPoint: " + std::to_string(keyPoint.x) + ", " + std::to_string(keyPoint.y));
-                    // 确保verticalInterval存在
+                    // ensure verticalInterval exists
                     if (verticalIntervals_.find(fixed) == verticalIntervals_.end() || 
                         verticalIntervals_[fixed].find(currentIntervals[i].start) == verticalIntervals_[fixed].end()) {
                         verticalIntervals_[fixed][currentIntervals[i].start] = VerticalInterval(fixed, currentIntervals[i].start, currentIntervals[i].end);
@@ -172,7 +172,7 @@ void Preprocess::processCurrentIntervals(std::vector<Interval>& prevIntervals,
             
             if(currentIntervals[i].end_mark == Trend::DECREASING && currentIntervals[i].end < maxEnd) {
                 if(isVertical) {
-                    // 只添加关键点，VerticalInterval已经在updateIntervalTrends中创建
+                    // only add key point, VerticalInterval already created in updateIntervalTrends
                     Vertex keyPoint(currentIntervals[i].end,fixed);
                     //logger::log_info("processKeyPoint: keyPoint: " + std::to_string(keyPoint.x) + ", " + std::to_string(keyPoint.y));
                     verticalIntervals_[fixed][currentIntervals[i].start].upVertex = keyPoint;
@@ -193,14 +193,14 @@ void Preprocess::processCurrentIntervals(std::vector<Interval>& prevIntervals,
 
 
 void Preprocess::buildKeyIntervals() {
-    // 遍历所有vertical intervals，找出包含关键点的interval
+    // traverse all vertical intervals, find interval containing key points
     for (const auto& [y, yMap] : verticalIntervals_) {
         for (const auto& [start, interval] : yMap) {
             //logger::log_info("verticalInterval: y: " + std::to_string(interval.y) + ", start: " + std::to_string(interval.start) + ", end: " + std::to_string(interval.end));
             if (interval.upVertex.has_value() || interval.downVertex.has_value() || !interval.horizontalKeyPoints.empty()) {
-                // 创建key
+                // create key
                 IntervalKey key{interval.y, interval.start, interval.end};
-                // 创建KeyInterval并插入到hashmap（传递verticalIntervals_中实际对象的指针）
+                // create KeyInterval and insert into hashmap (pass pointer to actual object in verticalIntervals_)
                 keyIntervals_[key] = KeyInterval(&verticalIntervals_[y][start]);
                 //logger::log_info("buildKeyIntervals: [" + std::to_string(key.y) + ", " + std::to_string(key.start) + ", " + std::to_string(key.end) + "]");
                 for(const auto& keyPoint : interval.horizontalKeyPoints) {
@@ -218,9 +218,9 @@ void Preprocess::buildKeyIntervals() {
 }
 
 void Preprocess::buildNeighbors() {
-    // 为每个key interval构建邻居关系
+    // build neighbor relations for each key interval
     for (auto& [key, interval] : keyIntervals_) {
-        // 检查verticalInterval是否存在
+        // check if verticalInterval exists
         if (verticalIntervals_.find(key.y) == verticalIntervals_.end() || 
             verticalIntervals_[key.y].find(key.start) == verticalIntervals_[key.y].end()) {
             //logger::log_info("Warning: verticalInterval not found for key: y=" + std::to_string(key.y) + ", start=" + std::to_string(key.start));
@@ -244,7 +244,7 @@ void Preprocess::buildNeighbors() {
 void Preprocess::processNeighborPair(const IntervalKey& key,
                                    const std::vector<IntervalKey>& directNeighbors,
                                    Direction dir) {
-    // 检查verticalInterval是否存在
+    // check if verticalInterval exists
     if (verticalIntervals_.find(key.y) == verticalIntervals_.end() || 
         verticalIntervals_[key.y].find(key.start) == verticalIntervals_[key.y].end()) {
         //logger::log_info("Warning: verticalInterval not found in processNeighborPair for key: y=" + std::to_string(key.y) + ", start=" + std::to_string(key.start));
@@ -254,18 +254,18 @@ void Preprocess::processNeighborPair(const IntervalKey& key,
     //logger::log_info("dir: " + std::string(dir == Direction::RIGHT ? "RIGHT" : "LEFT"));
     const auto& currentInterval = verticalIntervals_[key.y][key.start];
 
-    // 为每个直接邻居查找对应的关键区间邻居
+    // find corresponding key interval neighbor for each direct neighbor
     for (const auto& dirNeighbor : directNeighbors) {
-        // 首先检查neighbor本身是否是key interval
+        // first check if neighbor itself is a key interval
         if (keyIntervals_.find(dirNeighbor) != keyIntervals_.end()) {
-            // 如果neighbor本身就是key interval，创建三元组
+            // if neighbor itself is a key interval, create triple
             NeighborTriple triple(dirNeighbor, key, dirNeighbor);
             keyIntervals_[key].neighbors.push_back(triple);
             //logger::log_info("direct key interval neighbor: [" + std::to_string(dirNeighbor.y) + ", " + std::to_string(dirNeighbor.start) + ", " + std::to_string(dirNeighbor.end) + "]");
             continue;
         }
         
-        // 检查dirNeighbor是否存在
+        // check if dirNeighbor exists
         if (verticalIntervals_.find(dirNeighbor.y) == verticalIntervals_.end() || 
             verticalIntervals_[dirNeighbor.y].find(dirNeighbor.start) == verticalIntervals_[dirNeighbor.y].end()) {
             //logger::log_info("Warning: dirNeighbor not found: [" + std::to_string(dirNeighbor.y) + ", " + std::to_string(dirNeighbor.start) + ", " + std::to_string(dirNeighbor.end) + "]");
@@ -275,10 +275,10 @@ void Preprocess::processNeighborPair(const IntervalKey& key,
         VerticalInterval verticalInterval = verticalIntervals_[dirNeighbor.y][dirNeighbor.start];
         std::vector<IntervalKey> intervalsBetween = {dirNeighbor};
         
-        // 遍历邻居直到找到关键区间
+        // traverse neighbors until find key interval
         while (true) {
             //logger::log_info("Iterate until find key interval");
-            // 根据当前verticalInterval选择要遍历的邻居集合
+            // select neighbor set to traverse based on current verticalInterval
             const auto& neighborSet = (dir == Direction::RIGHT) ? 
                 verticalInterval.leftNeighbors : verticalInterval.rightNeighbors;
 
@@ -291,12 +291,12 @@ void Preprocess::processNeighborPair(const IntervalKey& key,
                     }
                 }
                 //logger::log_info("Warning: No more neighbors found for dirNeighbor: [" + std::to_string(dirNeighbor.y) + ", " + std::to_string(dirNeighbor.start) + ", " + std::to_string(dirNeighbor.end) + "]");
-                break;  // 没有更多邻居，退出循环
+                break;  // no more neighbors, exit loop
             }
             
             const auto& nextNeighbor = neighborSet.front();
             if (keyIntervals_.find(nextNeighbor) != keyIntervals_.end()) {
-                // 找到关键区间，创建三元组
+                // find key interval, create triple
                 NeighborTriple triple(dirNeighbor, intervalsBetween.back(), nextNeighbor);
                 keyIntervals_[key].neighbors.push_back(triple);
                 for(const auto& interval : intervalsBetween) {
@@ -311,9 +311,9 @@ void Preprocess::processNeighborPair(const IntervalKey& key,
                 //logger::log_info("keyIntervalNeighbor: [" + std::to_string(nextNeighbor.y) + ", " + std::to_string(nextNeighbor.start) + ", " + std::to_string(nextNeighbor.end) + "]");
                 //logger::log_info("currentDirectNeighbor: [" + std::to_string(dirNeighbor.y) + ", " + std::to_string(dirNeighbor.start) + ", " + std::to_string(dirNeighbor.end) + "]");
                 //logger::log_info("neighborDirectNeighbor: [" + std::to_string(intervalsBetween.back().y) + ", " + std::to_string(intervalsBetween.back().start) + ", " + std::to_string(intervalsBetween.back().end) + "]");
-                break;  // 找到关键区间，退出循环
+                break;  // find key interval, exit loop
             }
-            // 继续遍历，更新verticalInterval和pathDirectNeighbor
+            // continue traverse, update verticalInterval and pathDirectNeighbor
             intervalsBetween.push_back(nextNeighbor);
             verticalInterval = verticalIntervals_[nextNeighbor.y][nextNeighbor.start];
         }
@@ -326,13 +326,13 @@ void Preprocess::processTransitionVertices(const IntervalKey& key,
                                             const VerticalInterval& currentInterval,
                                             const std::vector<IntervalKey>& directNeighbors,
                                             Direction dir) {
-    // 记录直接邻居之间的transition vertices
-    // 处理直接邻居之间的transition vertices
+    // record transition vertices between direct neighbors
+    // process transition vertices between direct neighbors
     for (const auto& dirNeighbor1 : directNeighbors) {
         for (const auto& dirNeighbor2 : directNeighbors) {
             if (dirNeighbor1 == dirNeighbor2) continue;
             
-            // 检查关键点是否可以作为过渡顶点
+            // check if key point can be a transition vertex
             for (const auto& keyPoint : currentInterval.horizontalKeyPoints) {
                 if (keyPoint.direction == dir && 
                     keyPoint.point.x >= std::min(dirNeighbor1.end, dirNeighbor2.end) && 
@@ -419,26 +419,26 @@ std::optional<Vertex> Preprocess::findTransitionVertex(const IntervalKey& key,
 size_t Preprocess::getMemoryUsage() const {
     size_t total_memory = 0;
     
-    // 计算grid_占用的内存
+    // calculate memory usage of grid_
     total_memory += grid_.size() * grid_[0].size() * sizeof(int);
     
-    // 计算verticalIntervals_占用的内存
+    // calculate memory usage of verticalIntervals_
     for (const auto& [y, yMap] : verticalIntervals_) {
         for (const auto& [start, interval] : yMap) {
-            // VerticalInterval结构体大小
+            // size of VerticalInterval structure
             total_memory += sizeof(VerticalInterval);
-            // 动态分配的内存
+            // dynamic allocated memory
             total_memory += interval.horizontalKeyPoints.size() * sizeof(KeyPoint);
             total_memory += interval.leftNeighbors.size() * sizeof(IntervalKey);
             total_memory += interval.rightNeighbors.size() * sizeof(IntervalKey);
         }
     }
     
-    // 计算keyIntervals_占用的内存
+    // calculate memory usage of keyIntervals_
     for (const auto& [key, keyInterval] : keyIntervals_) {
-        // KeyInterval结构体大小
+        // size of KeyInterval structure
         total_memory += sizeof(KeyInterval);
-        // 动态分配的内存
+        // dynamic allocated memory
         total_memory += keyInterval.neighbors.size() * sizeof(NeighborTriple);
         // transitionVertices占用的内存
         for (const auto& [key1, innerMap] : keyInterval.transitionVertices) {

@@ -7,14 +7,14 @@
 class PreprocessTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        // 设置测试用的地图
+        // set test maps
         setupEmptyMap();
         setupSimpleMap();
         setupComplexMap();
     }
 
     void setupEmptyMap() {
-        // 8x8 空地图
+        // 8x8 empty map
         emptyMap = {
             {0, 0, 0, 0, 0, 0, 0, 0},
             {0, 0, 0, 0, 0, 0, 0, 0},
@@ -28,7 +28,7 @@ protected:
     }
 
     void setupSimpleMap() {
-        // 8x8 简单地图，中间有一个障碍物
+        // 8x8 simple map, with an obstacle in the middle
         simpleMap = {
             {0, 0, 0, 0, 0, 0, 0, 0},
             {0, 0, 0, 0, 0, 0, 0, 0},
@@ -42,7 +42,7 @@ protected:
     }
 
     void setupComplexMap() {
-        // 8x8 复杂地图，多个障碍物
+        // 8x8 complex map, with multiple obstacles
         complexMap = {
             {0, 0, 0, 1, 1, 0, 0, 0},
             {0, 0, 0, 1, 1, 0, 0, 0},
@@ -60,7 +60,7 @@ protected:
     std::vector<std::vector<int>> complexMap;
 };
 
-// 测试基本构造函数和地图尺寸
+// test basic constructor and map size
 TEST_F(PreprocessTest, ConstructorAndMapSize) {
     Preprocess preprocess(emptyMap);
     
@@ -72,36 +72,36 @@ TEST_F(PreprocessTest, ConstructorAndMapSize) {
     EXPECT_EQ(grid[0].size(), 8);
 }
 
-// 测试空地图的预处理
+// test empty map preprocessing
 TEST_F(PreprocessTest, EmptyMapPreprocess) {
     Preprocess preprocess(emptyMap);
     preprocess.preprocess();
     
-    // 空地图应该没有key intervals
+    // empty map should have no key intervals
     const auto& verticalIntervals = preprocess.getVerticalIntervals();
     const auto& keyIntervals = preprocess.getKeyIntervals();
     EXPECT_EQ(verticalIntervals.size(), 8);
     EXPECT_EQ(keyIntervals.size(), 0);
 }
 
-// 测试简单地图的预处理
+// test simple map preprocessing
 TEST_F(PreprocessTest, SimpleMapPreprocess) {
     Preprocess preprocess(simpleMap);
     preprocess.preprocess();
     
     const auto& keyIntervals = preprocess.getKeyIntervals();
-    // 简单地图应该有一些key intervals（在障碍物边界处）
+    // simple map should have some key intervals (at obstacle boundaries)
     EXPECT_EQ(keyIntervals.size(), 4);
 }
 
-// 测试findKeyInterval方法
+// test findKeyInterval method
 TEST_F(PreprocessTest, FindKeyInterval) {
     Preprocess preprocess(simpleMap);
     preprocess.preprocess();
     
     const auto& keyIntervals = preprocess.getKeyIntervals();
     
-    // 测试查找存在的key interval
+    // test find existing key interval
     for (const auto& [key, interval] : keyIntervals) {
         auto found = preprocess.findKeyInterval(key);
         EXPECT_TRUE(found.has_value());
@@ -110,14 +110,14 @@ TEST_F(PreprocessTest, FindKeyInterval) {
         EXPECT_EQ(found->getEnd(), interval.getEnd());
     }
     
-    // 测试查找不存在的key interval
+    // test find non-existing key interval
     Preprocess::IntervalKey nonExistentKey{999, 999, 999};
     auto notFound = preprocess.findKeyInterval(nonExistentKey);
     EXPECT_FALSE(notFound.has_value());
 }
 
 
-// 测试关键点提取
+// test key point extraction
 TEST_F(PreprocessTest, KeyPointExtraction) {
     Preprocess preprocess(simpleMap);
     preprocess.preprocess();
@@ -127,7 +127,7 @@ TEST_F(PreprocessTest, KeyPointExtraction) {
     auto interval3 = preprocess.findKeyInterval(Preprocess::IntervalKey{2,0,7});
     auto interval4 = preprocess.findKeyInterval(Preprocess::IntervalKey{5,0,7});
     
-    // 只测试存在的interval
+    // only test existing interval
     if (interval1.has_value()) {
         EXPECT_TRUE(interval1->getUpVertex().has_value() || interval1->getDownVertex().has_value());
     }else{
@@ -150,7 +150,7 @@ TEST_F(PreprocessTest, KeyPointExtraction) {
     }
 }
 
-// 测试邻居关系构建
+// test neighbor relations building
 TEST_F(PreprocessTest, NeighborRelations) {
     Preprocess preprocess(simpleMap);
     preprocess.preprocess();
@@ -158,7 +158,7 @@ TEST_F(PreprocessTest, NeighborRelations) {
     auto interval1 = preprocess.findKeyInterval(Preprocess::IntervalKey{4,0,2});
     auto interval2 = preprocess.findKeyInterval(Preprocess::IntervalKey{4,5,7});
     
-    // 只测试存在的interval
+    // only test existing interval
     if (interval1.has_value()) {
         EXPECT_GT(interval1->neighbors.size(), 0);
     }else{
@@ -171,7 +171,7 @@ TEST_F(PreprocessTest, NeighborRelations) {
     }
 }
 
-// 测试transition vertices
+// test transition vertices
 TEST_F(PreprocessTest, TransitionVertices) {
     Preprocess preprocess(simpleMap);
     preprocess.preprocess();
@@ -185,7 +185,7 @@ TEST_F(PreprocessTest, TransitionVertices) {
     Preprocess::IntervalKey key1{4,0,2};
     Preprocess::IntervalKey key2{4,5,7};
     
-    // 使用find()方法安全地检查transition vertices是否存在
+    // use find() method to safely check if transition vertices exist
     auto it1 = interval1->transitionVertices.find(key1);
     if (it1 != interval1->transitionVertices.end()) {
         auto it1_2 = it1->second.find(key2);
@@ -233,9 +233,9 @@ TEST_F(PreprocessTest, TransitionVertices) {
 
 
 
-// 测试边界情况
+// test edge cases
 TEST_F(PreprocessTest, EdgeCases) {
-    // 测试1x1地图
+    // test 1x1 map
     std::vector<std::vector<int>> tinyMap = {{0}};
     Preprocess tinyPreprocess(tinyMap);
     tinyPreprocess.preprocess();
@@ -243,7 +243,7 @@ TEST_F(PreprocessTest, EdgeCases) {
     EXPECT_EQ(tinyPreprocess.getHeight(), 1);
     EXPECT_EQ(tinyPreprocess.getWidth(), 1);
     
-    // 测试全障碍物地图
+    // test all obstacles map
     std::vector<std::vector<int>> allObstaclesMap = {
         {1, 1, 1},
         {1, 1, 1},
@@ -253,13 +253,13 @@ TEST_F(PreprocessTest, EdgeCases) {
     obstaclesPreprocess.preprocess();
 
     const auto& verticalIntervals = obstaclesPreprocess.getVerticalIntervals();
-    // 全障碍物地图可能没有vertical intervals，或者有但都是空的
+    // all obstacles map may have no vertical intervals, or have but are empty
     for (const auto& [y, rowIntervals] : verticalIntervals) {
         EXPECT_EQ(rowIntervals.size(), 0);
     }
     
     const auto& keyIntervals = obstaclesPreprocess.getKeyIntervals();
-    // 全障碍物地图应该没有key intervals
+    // all obstacles map should have no key intervals
     EXPECT_EQ(keyIntervals.size(), 0);
 }
 

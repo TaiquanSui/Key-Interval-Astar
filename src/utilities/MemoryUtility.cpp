@@ -15,11 +15,11 @@ size_t get_current_memory_usage() {
 #ifdef _WIN32
     PROCESS_MEMORY_COUNTERS_EX pmc;
     if (GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc))) {
-        return pmc.WorkingSetSize;  // 返回工作集大小（物理内存）
+        return pmc.WorkingSetSize;  // return working set size (physical memory)
     }
     return 0;
 #else
-    // Linux实现 - 读取 /proc/self/status 文件
+    // Linux implementation - read /proc/self/status file
     FILE* file = fopen("/proc/self/status", "r");
     if (file) {
         char line[128];
@@ -28,7 +28,7 @@ size_t get_current_memory_usage() {
                 size_t memory;
                 sscanf(line, "VmRSS: %zu", &memory);
                 fclose(file);
-                return memory * 1024; // 转换为字节
+                return memory * 1024; // convert to bytes
             }
         }
         fclose(file);
@@ -45,7 +45,7 @@ size_t calculate_memory_increase(size_t before, size_t after) {
     if (after >= before) {
         return after - before;
     } else {
-        // 如果内存减少了，返回0（可能是内存回收）
+        // if memory decreased, return 0 (maybe memory recycling)
         return 0;
     }
 }

@@ -5,7 +5,7 @@
 #include <vector>
 #include <string>
 
-// 通用的solver接口
+// general solver interface
 class SolverInterface {
 public:
     virtual ~SolverInterface() = default;
@@ -16,14 +16,14 @@ public:
     virtual double getSearchTime() const = 0;
     virtual void resetSearchTime() = 0;
     
-    // 内存监控接口
-    virtual size_t getPreprocessMemoryUsage() const = 0;  // 获取预处理占用的内存（字节）
-    virtual size_t getSearchMemoryIncrease() const = 0;   // 获取搜索过程中增加的内存（字节）
-    virtual void resetSearchMemoryUsage() = 0;            // 重置搜索内存统计
-    // 新增：获取预处理时间（秒）
+    // memory monitoring interface
+    virtual size_t getPreprocessMemoryUsage() const = 0;  // get memory usage of preprocessing (bytes)
+    virtual size_t getSearchMemoryIncrease() const = 0;   // get memory usage of search (bytes)
+    virtual void resetSearchMemoryUsage() = 0;            // reset search memory usage
+    // new: get preprocessing time (seconds)
     virtual double getPreprocessTime() const = 0;
     
-    // 新增：预处理接口
+    // new: preprocessing interface
     virtual void preprocess(const std::vector<std::vector<int>>& grid) = 0;
 };
 

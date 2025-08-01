@@ -18,18 +18,18 @@ void HPAStar::preprocess(const std::vector<std::vector<int>>& grid) {
     grid_ = grid;
 
     ////logger::log_info("Creating clusters");
-    // 创建聚类
+    // create clusters
     create_clusters();
     
     ////logger::log_info("Identifying entrances and exits");
-    // 识别入口和出口点
+    // identify entrances and exits
     identify_entrances_and_exits();
     
     ////logger::log_info("Computing abstract edges");
-    // 计算抽象边
+    // compute abstract edges
     compute_abstract_edges();
     
-    // 直接计算内存使用量，而不是使用系统内存监测
+    // directly calculate memory usage, instead of using system memory monitoring
     preprocess_memory_ = getMemoryUsage();
     
     ////logger::log_info("Preprocess memory usage: " + std::to_string(preprocess_memory_));
@@ -43,16 +43,16 @@ void HPAStar::preprocess(const std::vector<std::vector<int>>& grid) {
 void HPAStar::create_clusters() {
     if (grid_.empty() || grid_[0].empty()) return;
     
-    int rows = grid_.size();    // 行数（row）
-    int cols = grid_[0].size(); // 列数（col）
+    int rows = grid_.size();    // row number
+    int cols = grid_[0].size(); // column number
     int cluster_id = 0;
-    // 按行(row)和列(col)分块
+    // split by row (row) and column (col)
     for (int row = 0; row < rows; row += cluster_size_) {
         for (int col = 0; col < cols; col += cluster_size_) {
             Vertex top_left(row, col); // x=row, y=col
             Vertex bottom_right(std::min(row + cluster_size_ - 1, rows - 1), 
                                std::min(col + cluster_size_ - 1, cols - 1));
-            // 只创建包含可通行点的聚类
+            // only create clusters containing traversable points
             bool has_traversable = false;
             for (int r = top_left.x; r <= bottom_right.x && !has_traversable; ++r) {
                 for (int c = top_left.y; c <= bottom_right.y && !has_traversable; ++c) {
@@ -69,15 +69,16 @@ void HPAStar::create_clusters() {
 }
 
 void HPAStar::identify_entrances_and_exits() {
-    int rows = grid_.size();    // 行数（row）
-    int cols = grid_[0].size(); // 列数（col）
-    // 只处理右边界和下边界
+    int rows = grid_.size();    // row number
+    int cols = grid_[0].size(); // column number
+    // only process right boundary and bottom boundary
     for (auto& cluster : clusters_) {
-        // 右边界：固定列，行递增
+        // right boundary: fixed column, row increment
         std::vector<Vertex> boundary_points;
-        int right_col = cluster.bottom_right.y; // y 实际为 col
-        for (int row = cluster.top_left.x; row <= cluster.bottom_right.x; ++row) { // x 实际为 row
+        int right_col = cluster.bottom_right.y; // y is actually col
+        for (int row = cluster.top_left.x; row <= cluster.bottom_right.x; ++row) { // x is actually row
             Vertex v(row, right_col); // Vertex(x=row, y=col)
+            // check if the point is traversable and the next point is also traversable
             if (utils::isPassable(grid_, v) && utils::isPassable(grid_, Vertex(row, right_col + 1))) {
                 boundary_points.push_back(v);
             } else if (!boundary_points.empty()) {
@@ -89,7 +90,7 @@ void HPAStar::identify_entrances_and_exits() {
                     if (right_cluster) {
                         Vertex right_exit(exit.x, exit.y + 1);
                         right_cluster->exits.insert(right_exit);
-                        // 直接添加抽象边
+                        // directly add abstract edge
                         abstract_edges_[exit][right_exit] = AbstractEdge(1.0);
                         abstract_edges_[right_exit][exit] = AbstractEdge(1.0);
                         //logger::log_info("[HPAStar] abstract_edges: (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ") -> (" + std::to_string(right_exit.x) + "," + std::to_string(right_exit.y) + ")");
@@ -99,7 +100,7 @@ void HPAStar::identify_entrances_and_exits() {
                 boundary_points.clear();
             }
         }
-        // 处理最后一组
+        // process the last group
         if (!boundary_points.empty()) {
             auto exits = generate_exits_from_boundary(boundary_points);
             for (const auto& exit : exits) {
@@ -109,7 +110,7 @@ void HPAStar::identify_entrances_and_exits() {
                 if (right_cluster) {
                     Vertex right_exit(exit.x, exit.y + 1);
                     right_cluster->exits.insert(right_exit);
-                    // 直接添加抽象边
+                    // directly add abstract edge
                     abstract_edges_[exit][right_exit] = AbstractEdge(1.0);
                     abstract_edges_[right_exit][exit] = AbstractEdge(1.0);
                     //logger::log_info("[HPAStar] abstract_edges: (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ") -> (" + std::to_string(right_exit.x) + "," + std::to_string(right_exit.y) + ")");
@@ -118,10 +119,10 @@ void HPAStar::identify_entrances_and_exits() {
             }
             boundary_points.clear();
         }
-        // 下边界：固定行，列递增
+        // bottom boundary: fixed row, column increment
         boundary_points.clear();
-        int bottom_row = cluster.bottom_right.x; // x 实际为 row
-        for (int col = cluster.top_left.y; col <= cluster.bottom_right.y; ++col) { // y 实际为 col
+        int bottom_row = cluster.bottom_right.x; // x is actually row
+        for (int col = cluster.top_left.y; col <= cluster.bottom_right.y; ++col) { // y is actually col
             Vertex v(bottom_row, col);
             if (utils::isPassable(grid_, v) && utils::isPassable(grid_, Vertex(bottom_row + 1, col))) {
                 boundary_points.push_back(v);
@@ -134,7 +135,7 @@ void HPAStar::identify_entrances_and_exits() {
                     if (bottom_cluster) {
                         Vertex bottom_exit(exit.x + 1, exit.y);
                         bottom_cluster->exits.insert(bottom_exit);
-                        // 直接添加抽象边
+                        // directly add abstract edge
                         abstract_edges_[exit][bottom_exit] = AbstractEdge(1.0);
                         abstract_edges_[bottom_exit][exit] = AbstractEdge(1.0);
                         //logger::log_info("[HPAStar] abstract_edges: (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ") -> (" + std::to_string(bottom_exit.x) + "," + std::to_string(bottom_exit.y) + ")");
@@ -165,7 +166,7 @@ void HPAStar::identify_entrances_and_exits() {
     }
 }
 
-// 辅助：根据坐标查找cluster指针
+// auxiliary: find cluster pointer by position
 Cluster* HPAStar::find_cluster_by_position(int x, int y) {
     for (auto& cluster : clusters_) {
         if (cluster.contains(Vertex(x, y))) {
@@ -180,7 +181,7 @@ std::vector<Vertex> HPAStar::generate_exits_from_boundary(const std::vector<Vert
     const int WIDTH_THRESHOLD = 6;
     std::vector<Vertex> exits;
     if (boundary.empty()) return exits;
-    // 直接对boundary整体生成出口点
+    // directly generate exits from boundary
     if (boundary.size() == 1) {
         exits.push_back(boundary[0]);
     } else if (boundary.size() < WIDTH_THRESHOLD) {
@@ -196,13 +197,13 @@ std::vector<Vertex> HPAStar::generate_exits_from_boundary(const std::vector<Vert
 void HPAStar::compute_abstract_edges() {
     
     for (const auto& cluster : clusters_) {
-        // compute_abstract_edges只保留聚类内出口点之间的最短路
+        // compute_abstract_edges only keeps the shortest path between exits in the cluster
         std::vector<Vertex> exits_vec(cluster.exits.begin(), cluster.exits.end());
         for (size_t i = 0; i < exits_vec.size(); ++i) {
             for (size_t j = i + 1; j < exits_vec.size(); ++j) {
                 const Vertex& a = exits_vec[i];
                 const Vertex& b = exits_vec[j];
-                // 使用边界限制的A*搜索，限制在cluster范围内
+                // use boundary restricted A* search, limited to cluster range
                 std::vector<Vertex> path = a_star(a, b, grid_, cluster.top_left, cluster.bottom_right);
                 if (!path.empty()) {
                     double cost = path.size() - 1;
@@ -224,10 +225,10 @@ std::vector<Vertex> HPAStar::search(const Vertex& start, const Vertex& target) {
     
     std::vector<Vertex> result;
     
-    // 如果起点和终点在同一聚类内，直接使用A*
+    // if start and target are in the same cluster, use A* directly
     if (same_cluster(start, target)) {
         //logger::log_info("[HPAStar] start searching in same cluster");
-        // 找到对应的cluster，使用边界限制的A*
+        // find the corresponding cluster, use boundary restricted A*
         int cluster_id = get_cluster_id(start);
         for (const auto& cluster : clusters_) {
             if (cluster.id == cluster_id) {
@@ -235,11 +236,11 @@ std::vector<Vertex> HPAStar::search(const Vertex& start, const Vertex& target) {
                 break;
             }
         }
-        // 注意：a_star函数不返回扩展节点数，这里暂时设为0
+        // note: a_star function does not return expanded node count, here temporarily set to 0
         expanded_nodes_ = 0;
     } else {
         //logger::log_info("[HPAStar] start searching in different clusters");
-        // 使用抽象图搜索
+        // use abstract graph search
         result = search_abstract_graph(start, target);
     }
     
@@ -260,12 +261,12 @@ std::vector<Vertex> HPAStar::search_abstract_graph(const Vertex& start, const Ve
     
     std::unordered_map<Vertex, double> g_values;
     
-    // 获取起点和终点所在的聚类
+    // get the cluster where the start and target are located
     int start_cluster = get_cluster_id(start);
     int target_cluster = get_cluster_id(target);
     //logger::log_info("[HPAStar] start_cluster: " + std::to_string(start_cluster) + ", target_cluster: " + std::to_string(target_cluster));
 
-    // 1. 起点到出口点
+    // 1. start to exit
     for (const auto& cluster : clusters_) {
         if (cluster.id == start_cluster) {
             auto start_node = std::make_shared<AbstractNode>(start, 0.0, heuristic(start, target));
@@ -275,7 +276,7 @@ std::vector<Vertex> HPAStar::search_abstract_graph(const Vertex& start, const Ve
                 break;
             }
             for (const auto& exit : cluster.exits) {
-                // 使用边界限制的A*搜索，限制在start cluster范围内
+                // use boundary restricted A* search, limited to start cluster range
                 std::vector<Vertex> path = a_star(start, exit, grid_, cluster.top_left, cluster.bottom_right);
                 if (!path.empty()) {
                     double cost = path.size() - 1;
@@ -289,7 +290,7 @@ std::vector<Vertex> HPAStar::search_abstract_graph(const Vertex& start, const Ve
         }
     }
 
-    // 2. 终点相关
+    // 2. target related
     std::unordered_map<Vertex, AbstractEdge> target_edges;
     for (const auto& cluster : clusters_) {
         if (cluster.id == target_cluster) {
@@ -297,7 +298,7 @@ std::vector<Vertex> HPAStar::search_abstract_graph(const Vertex& start, const Ve
                 break;
             }
             for (const auto& exit : cluster.exits) {
-                // 使用边界限制的A*搜索，限制在target cluster范围内
+                // use boundary restricted A* search, limited to target cluster range
                 std::vector<Vertex> path = a_star(exit, target, grid_, cluster.top_left, cluster.bottom_right);
                 if (!path.empty()) {
                     double cost = path.size() - 1;
@@ -309,7 +310,7 @@ std::vector<Vertex> HPAStar::search_abstract_graph(const Vertex& start, const Ve
         }
     }
 
-    // 3. 搜索
+    // 3. search
     while (!open_list.empty()) {
         auto current = open_list.top();
         open_list.pop();
@@ -321,7 +322,7 @@ std::vector<Vertex> HPAStar::search_abstract_graph(const Vertex& start, const Ve
             return path;
         }
 
-        // 检查是否能直接到达 target
+        // check if can directly reach target
         auto it_target = target_edges.find(current->exit);
         if (it_target != target_edges.end()) {
             double new_g = current->g_cost + it_target->second.cost;
@@ -333,7 +334,7 @@ std::vector<Vertex> HPAStar::search_abstract_graph(const Vertex& start, const Ve
             }
         }
 
-        // 遍历所有抽象边，找到从当前出口点出发的边
+        // traverse all abstract edges, find edges from current exit point
         auto from_it = abstract_edges_.find(current->exit);
         if (from_it != abstract_edges_.end()) {
             for (const auto& to_map : from_it->second) {
@@ -341,13 +342,6 @@ std::vector<Vertex> HPAStar::search_abstract_graph(const Vertex& start, const Ve
                 const Vertex& to = to_map.first;
                 const AbstractEdge& edge = to_map.second;
                 double new_g = current->g_cost + edge.cost;
-
-                // if (g_values.find(to) != g_values.end()) {
-                //     //logger::log_info("[HPAStar] has already g_value: (" + std::to_string(g_values[to]) + ")");
-                //     if (new_g >= g_values[to]) {
-                //         //logger::log_info("[HPAStar] node with higher g_cost: (" + std::to_string(to.x) + "," + std::to_string(to.y) + ")");
-                //     }
-                // }
 
                 if (g_values.find(to) == g_values.end() || new_g < g_values[to]) {
                     g_values[to] = new_g;
@@ -365,7 +359,7 @@ std::vector<Vertex> HPAStar::search_abstract_graph(const Vertex& start, const Ve
 std::vector<Vertex> HPAStar::reconstruct_path(const std::shared_ptr<AbstractNode>& goal_node, 
                                               const Vertex& start, const Vertex& target) {
     std::vector<Vertex> path;
-    // 从目标节点回溯到起始节点
+    // backtrack from target node to start node
     std::vector<std::shared_ptr<AbstractNode>> abstract_path;
     auto current = goal_node;
     while (current) {
@@ -425,24 +419,24 @@ void HPAStar::resetSearchMemoryUsage() {
 size_t HPAStar::getMemoryUsage() const {
     size_t total_memory = 0;
     
-    // 计算grid_占用的内存
+    // calculate memory usage of grid_
     if (!grid_.empty() && !grid_[0].empty()) {
         total_memory += grid_.size() * grid_[0].size() * sizeof(int);
     }
     
-    // 计算clusters_占用的内存
+    // calculate memory usage of clusters_
     for (const auto& cluster : clusters_) {
-        // Cluster结构体大小
+        // Cluster structure size
         total_memory += sizeof(Cluster);
-        // exits集合占用的内存
+        // memory usage of exits set
         total_memory += cluster.exits.size() * sizeof(Vertex);
     }
     
-    // 计算abstract_edges_占用的内存
+    // calculate memory usage of abstract_edges_
     for (const auto& [from_vertex, edge_map] : abstract_edges_) {
-        // 外层map的key (Vertex)
+        // outer map key (Vertex)
         total_memory += sizeof(Vertex);
-        // 内层map的大小
+        // inner map size
         total_memory += edge_map.size() * sizeof(std::pair<Vertex, AbstractEdge>);
     }
     

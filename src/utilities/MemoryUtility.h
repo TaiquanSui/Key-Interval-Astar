@@ -5,16 +5,16 @@
 
 namespace memory_utils {
 
-// 获取当前进程内存使用量（字节）
+// get current process memory usage (bytes)
 size_t get_current_memory_usage();
 
-// 获取当前进程内存使用量（MB）
+// get current process memory usage (MB)
 double get_current_memory_usage_mb();
 
-// 计算内存增长量（字节）
+// calculate memory increase (bytes)
 size_t calculate_memory_increase(size_t before, size_t after);
 
-// 计算内存增长量（MB）
+// calculate memory increase (MB)
 double calculate_memory_increase_mb(size_t before, size_t after);
 
 } // namespace memory_utils

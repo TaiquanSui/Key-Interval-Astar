@@ -21,22 +21,22 @@ struct AStarNode {
 
 struct AStarNodeComparator {
     bool operator()(const std::shared_ptr<AStarNode>& a, const std::shared_ptr<AStarNode>& b) const {
-        // 1. f(n) 低的优先
+        // 1. f(n) lower priority
         if (std::abs(a->f() - b->f()) > 1e-6) {
             return a->f() > b->f();
         }
 
-        // g(n) 高的优先
+        // g(n) higher priority
         if (std::abs(a->g - b->g) > 1e-6) {
-            return a->g < b->g;  // 注意这里是 < 因为我们要高的优先
+            return a->g < b->g;  // note: here is < because we want higher priority
         }
 
-        // 时间戳早的优先
+        // earlier timestamp priority
         return a->time > b->time;
     }
 };
 
-// A*搜索器类，直接实现SolverInterface接口
+// A* search class, directly implement SolverInterface interface
 class AStar : public SolverInterface {
 private:
     std::vector<std::vector<int>> grid_;
@@ -50,10 +50,10 @@ public:
     AStar(const std::vector<std::vector<int>>& grid, const std::string& name = "AStar") 
         : grid_(grid), name_(name) {}
     
-    // 新增：默认构造函数，用于延迟初始化
+    // new: default constructor, for delayed initialization
     AStar(const std::string& name = "AStar") : name_(name) {}
     
-    // 实现SolverInterface接口
+    // implement SolverInterface interface
     std::vector<Vertex> search(const Vertex& start, const Vertex& target) override;
     std::string get_name() const override { return name_; }
     int getExpandedNodes() const override { return expanded_nodes_; }
@@ -61,29 +61,29 @@ public:
     double getSearchTime() const override { return search_time_; }
     void resetSearchTime() override { search_time_ = 0.0; }
 
-    // 内存监控接口实现
+    // memory monitoring interface implementation
     size_t getPreprocessMemoryUsage() const override { return 0; }
     size_t getSearchMemoryIncrease() const override;
     void resetSearchMemoryUsage() override;
     double getPreprocessTime() const override { return 0.0; }
     
-    // 实现预处理接口（A*不需要预处理，但需要更新地图）
+    // implement preprocessing interface (A* does not need preprocessing, but needs to update map)
     void preprocess(const std::vector<std::vector<int>>& grid) override { grid_ = grid; }
 
 private:
     std::vector<Vertex> reconstruct_path(const std::shared_ptr<AStarNode>& goal_node) const;
 };
 
-// Basic A* search (保持向后兼容)
+// Basic A* search
 std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal, 
                           const std::vector<std::vector<int>>& grid);
 
-// 支持自定义方向的A*搜索
+// A* search with custom directions
 std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
                           const std::vector<std::vector<int>>& grid,
                           const std::vector<Vertex>& directions);
 
-// 支持边界限制的A*搜索
+// A* search with boundary restriction
 std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
                           const std::vector<std::vector<int>>& grid,
                           const Vertex& top_left, const Vertex& bottom_right);

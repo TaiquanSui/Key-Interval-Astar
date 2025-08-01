@@ -11,24 +11,24 @@
 KeyIntervalAStar::KeyIntervalAStar(const Preprocess &preprocess, const std::string &name)
     : preprocess_(&preprocess), name_(name)
 {
-    // 计算预处理占用的内存
+    // calculate memory usage of preprocessing
     preprocess_memory_usage_ = preprocess.getMemoryUsage();
     preprocess_time_ = preprocess.getPreprocessTime();
 }
 
-// 新增：默认构造函数
+// new: default constructor
 KeyIntervalAStar::KeyIntervalAStar(const std::string &name)
     : preprocess_(nullptr), name_(name)
 {
 }
 
-// 新增：预处理方法
+// new: preprocessing method
 void KeyIntervalAStar::preprocess(const std::vector<std::vector<int>>& grid) {
-    // 创建新的Preprocess对象
+    // create new Preprocess object
     preprocess_ptr_ = std::make_unique<Preprocess>(grid);
     preprocess_ptr_->preprocess();
     
-    // 更新指针和统计信息
+    // update pointer and statistics
     preprocess_ = preprocess_ptr_.get();
     preprocess_memory_usage_ = preprocess_->getMemoryUsage();
     preprocess_time_ = preprocess_->getPreprocessTime();
@@ -36,25 +36,25 @@ void KeyIntervalAStar::preprocess(const std::vector<std::vector<int>>& grid) {
 
 std::vector<Vertex> KeyIntervalAStar::search(const Vertex &start, const Vertex &target)
 {
-    // 检查是否已经预处理
+    // check if preprocessing is done
     if (!preprocess_) {
         throw std::runtime_error("Preprocess not initialized. Call preprocess() first.");
     }
     
-    // 重置扩展节点计数和时间
+    // reset expanded nodes count and time
     expanded_nodes_ = 0;
     search_time_ = 0.0;
     search_memory_increase_ = 0;
 
-    // 记录搜索开始前的内存使用量
+    // record memory usage before search
     size_t memory_before = memory_utils::get_current_memory_usage();
     
-    // 使用QueryPerformanceCounter计时
+    // use QueryPerformanceCounter to measure time
     LARGE_INTEGER freq, t_start, t_end;
     QueryPerformanceFrequency(&freq);
     QueryPerformanceCounter(&t_start);
 
-    // 1. 可达性检查
+    // 1. check if reachable
     if (!utils::isPassable(preprocess_->getGrid(), start) || !utils::isPassable(preprocess_->getGrid(), target))
     {
         QueryPerformanceCounter(&t_end);
@@ -71,9 +71,9 @@ std::vector<Vertex> KeyIntervalAStar::search(const Vertex &start, const Vertex &
         return path;
     }
 
-    // 初始化A*搜索
+    // initialize A* search
     std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>> openList;
-    std::unordered_map<IntervalKey, double, IntervalKeyHash> gScore; // 记录g值
+    std::unordered_map<IntervalKey, double, IntervalKeyHash> gScore; // record g value
 
     initializeStartNode(start, target, queryResult, openList, gScore);
 
@@ -89,47 +89,47 @@ std::vector<Vertex> KeyIntervalAStar::search(const Vertex &start, const Vertex &
         //logger::log_info("g: " + std::to_string(current.g));
         //logger::log_info("h: " + std::to_string(current.f - current.g));
 
-        // 检查是否到达终点
+        // check if reached target
         if (current.isTarget)
         {
             expanded_nodes_++;
             QueryPerformanceCounter(&t_end);
             search_time_ = static_cast<double>(t_end.QuadPart - t_start.QuadPart) / freq.QuadPart;
             
-            // 记录搜索结束后的内存使用量
+            // record memory usage after search
             size_t memory_after = memory_utils::get_current_memory_usage();
             search_memory_increase_ = memory_utils::calculate_memory_increase(memory_before, memory_after);
             
             return constructPath(current.waypoints);
         }
 
-        // 检查是否在终点key intervals中
+        // check if in target key intervals
         if (handleTargetKeyIntervals(current, target, queryResult, openList, gScore))
         {
             continue;
         }
         
-        // 获取当前key interval
+        // get current key interval
         const auto &currentInterval = preprocess_->getKeyIntervals().at(current.keyInterval.value());
 
-        // 遍历当前key interval的邻居
+        // traverse neighbors of current key interval
         for (const auto &triple : currentInterval.neighbors)
         {
-            // 跳过父节点
+            // skip parent node
             if (triple.neighborKeyInterval == current.parent)
                 continue;
             //logger::log_info("handle neighbor: " + std::to_string(triple.neighborKeyInterval.y) + "," + std::to_string(triple.neighborKeyInterval.start) + "," + std::to_string(triple.neighborKeyInterval.end));
             auto neighborNode = handleNeighbor(current, triple, target);
             insertNode(neighborNode, openList, gScore);
-            expanded_nodes_++; // 增加扩展节点计数
+            expanded_nodes_++; // increase expanded nodes count
         }
     }
 
-    // 如果没有找到路径，返回空路径
+    // if no path found, return empty path
     QueryPerformanceCounter(&t_end);
     search_time_ = static_cast<double>(t_end.QuadPart - t_start.QuadPart) / freq.QuadPart;
     
-    // 记录搜索结束后的内存使用量
+    // record memory usage after search
     size_t memory_after = memory_utils::get_current_memory_usage();
     search_memory_increase_ = memory_utils::calculate_memory_increase(memory_before, memory_after);
     
@@ -152,7 +152,7 @@ KeyIntervalAStar::KeyIntervalQueryResult KeyIntervalAStar::queryKeyIntervals(con
     IntervalKey startKey{startInterval.y, startInterval.start, startInterval.end};
     IntervalKey targetKey{targetInterval.y, targetInterval.start, targetInterval.end};
 
-    // 设置起点和终点所在的关键区间
+    // set start and target key intervals
     if (preprocess_->findKeyInterval(startKey))
     {
         result.startK = startKey;
@@ -167,7 +167,7 @@ KeyIntervalAStar::KeyIntervalQueryResult KeyIntervalAStar::queryKeyIntervals(con
     const auto &targetLeft = targetInterval.leftKeyInterval;
     const auto &targetRight = targetInterval.rightKeyInterval;
 
-    // 判断是否直接可达
+    // check if directly reachable
     result.directlyReachable =
         (result.startK && result.targetK && result.startK.value() == result.targetK.value()) ||
         (result.startK && targetLeft && targetLeft->first == result.startK.value()) ||
@@ -178,7 +178,7 @@ KeyIntervalAStar::KeyIntervalQueryResult KeyIntervalAStar::queryKeyIntervals(con
         (!result.startK && !result.targetK && !startLeft && !startRight) ||
         (!result.startK && !result.targetK && !targetLeft && !targetRight);
 
-    // 只有不可直达时才需要A*的key interval集合
+    // only need A* key interval set when not directly reachable
     if (!result.directlyReachable)
     {
         result.startLeft = startLeft;
@@ -213,7 +213,7 @@ void KeyIntervalAStar::initializeStartNode(const Vertex &start, const Vertex &ta
         }
     }
 
-    // 起点不在关键区间内，使用左右邻居
+    // start not in key intervals, use left and right neighbors
     if (queryResult.startLeft)
     {
         const auto &[startKeyInterval, startDirectNeighbor] = queryResult.startLeft.value();
@@ -248,7 +248,7 @@ KeyIntervalAStar::SearchNode KeyIntervalAStar::handleNeighbor(const KeyIntervalA
                                                               const NeighborTriple &neighborTriple,
                                                               const Vertex &target)
 {
-    // 检查是否有transition vertex
+    // check if has transition vertex
     auto transitionVertex = preprocess_->findTransitionVertex(current.keyInterval.value(), current.fromDirectNeighbor.value(), neighborTriple.currentDirectNeighbor);
     if (transitionVertex.has_value())
     {
@@ -256,7 +256,7 @@ KeyIntervalAStar::SearchNode KeyIntervalAStar::handleNeighbor(const KeyIntervalA
         return directTransition(current, neighborTriple, transitionVertex.value(), target);
     }
 
-    // 处理key points
+    // handle key points
     return handleUpDownVertex(current, neighborTriple, target);
 }
 
@@ -368,10 +368,10 @@ bool KeyIntervalAStar::handleTargetKeyIntervals(const SearchNode &current, const
                                                 std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>> &openList,
                                                 std::unordered_map<IntervalKey, double, IntervalKeyHash> &gScore)
 {
-    // 检查是否在终点key intervals中
+    // check if in target key intervals
     if (queryResult.targetK && current.keyInterval.value() == queryResult.targetK.value())
     {
-        // 终点在关键区间内
+        // target in key intervals
         auto targetNode = handleTargetKeyInterval(current, queryResult.targetK.value(), target);
         insertNode(targetNode, openList, gScore);
         expanded_nodes_++;
@@ -379,7 +379,7 @@ bool KeyIntervalAStar::handleTargetKeyIntervals(const SearchNode &current, const
     }
     else
     {
-        // 终点不在关键区间内，检查左右邻居
+        // target not in key intervals, check left and right neighbors
         if (queryResult.targetLeft)
         {
             const auto &[targetKeyInterval, targetFromDirectNeighbor] = queryResult.targetLeft.value();
@@ -464,7 +464,7 @@ KeyIntervalAStar::SearchNode KeyIntervalAStar::handleTargetKeyInterval(const Key
 
     }
 
-    // 检查最后一个waypoint到target vertex之间是否还有关键点
+    // check if there are key points between last waypoint and target vertex
     checkAndAddUpDownVertex(target, current.waypoints.back(), finalWaypoints, current);
 
     finalWaypoints.push_back(target);
@@ -493,22 +493,22 @@ std::pair<double, double> KeyIntervalAStar::calcGAndH(const std::vector<Vertex> 
     //logger::log_info("calculate g and h for evaluation interval: " + std::to_string(evaluationInterval.y) + "," + std::to_string(evaluationInterval.start) + "," + std::to_string(evaluationInterval.end));
     //logger::log_info("waypoints: " + //logger::vectorToString(waypoints));
 
-    // 计算waypoints中相邻点之间的代价
+    // calculate cost between adjacent points in waypoints
     for (size_t i = 1; i < waypoints.size(); ++i)
     {
         gValue += heuristic(waypoints[i - 1], waypoints[i]);
         //logger::log_info("gValue += heuristic(" + std::to_string(waypoints[i - 1].x) + "," + std::to_string(waypoints[i - 1].y) + "," + std::to_string(waypoints[i].x) + "," + std::to_string(waypoints[i].y) + "): " + std::to_string(gValue));
     }
 
-    // 计算最后一段的代价
+    // calculate cost of last segment
     if (!preprocess_->isVertexInKeyInterval(waypoints.back(), evaluationInterval))
     {
-        //  否则根据目标vertex的位置计算代价
+        // otherwise calculate cost based on target vertex position
         if (target.x <= evaluationInterval.start)
         {
             Vertex evaluationVertex = Vertex(evaluationInterval.start, evaluationInterval.y);
             //logger::log_info("evaluation vertex: " + std::to_string(evaluationVertex.x) + "," + std::to_string(evaluationVertex.y));
-            // 如果目标x小于等于interval的start
+            // if target x is less than or equal to interval start
             gValue += heuristic(waypoints.back(), evaluationVertex);
             hValue = heuristic(evaluationVertex, target);
         }
@@ -516,7 +516,7 @@ std::pair<double, double> KeyIntervalAStar::calcGAndH(const std::vector<Vertex> 
         {
             Vertex evaluationVertex = Vertex(evaluationInterval.end, evaluationInterval.y);
             //logger::log_info("evaluation vertex: " + std::to_string(evaluationVertex.x) + "," + std::to_string(evaluationVertex.y));
-            // 如果目标x大于等于interval的end
+            // if target x is greater than or equal to interval end
             gValue += heuristic(waypoints.back(), evaluationVertex);
             hValue = heuristic(evaluationVertex, target);
         }
@@ -524,7 +524,7 @@ std::pair<double, double> KeyIntervalAStar::calcGAndH(const std::vector<Vertex> 
         {
             Vertex evaluationVertex = Vertex(target.x, evaluationInterval.y);
             //logger::log_info("evaluation vertex: " + std::to_string(evaluationVertex.x) + "," + std::to_string(evaluationVertex.y));
-            // 如果目标x在interval的范围内
+            // if target x is in interval
             gValue += heuristic(waypoints.back(), evaluationVertex);
             hValue = heuristic(evaluationVertex, target);
         }
@@ -543,14 +543,14 @@ std::pair<double, double> KeyIntervalAStar::calcGAndH(const std::vector<Vertex> 
 std::vector<Vertex> KeyIntervalAStar::constructPath(std::vector<Vertex> waypoints) const
 {
     //logger::log_info("construct path with waypoints: " + //logger::vectorToString(waypoints));
-    //  使用waypoints重建完整路径
+    // use waypoints to reconstruct full path
     std::vector<Vertex> path;
     if (waypoints.empty())
         return path;
     const auto &grid = preprocess_->getGrid();
     for (size_t i = 0; i < waypoints.size() - 1; ++i)
     {
-        // 调用A*算法获取两个waypoints之间的路径，去除首点避免重复
+        // call A* algorithm to get path between two waypoints, remove first point to avoid duplicate
         Vertex start = waypoints[i];
         Vertex end = waypoints[i + 1];
 
@@ -573,7 +573,7 @@ std::vector<Vertex> KeyIntervalAStar::constructPath(std::vector<Vertex> waypoint
         }
         else
         {
-            // 若A*失败
+            // if A* failed
             //logger::log_error("A* failed with waypoints: " + //logger::vectorToString(waypoints));
             return {};
         }
@@ -585,14 +585,14 @@ void KeyIntervalAStar::insertNode(const SearchNode &node,
                                   std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>> &openList,
                                   std::unordered_map<IntervalKey, double, IntervalKeyHash> &gScore)
 {
-    // 对于目标节点，直接插入到openList中，不进行g值比较
+    // for target node, directly insert into openList, no g value comparison
     if (node.isTarget)
     {
         openList.push(node);
         return;
     }
 
-    // 检查g值是否更优
+    // check if g value is better
     if (gScore.find(node.keyInterval.value()) == gScore.end() || node.g < gScore[node.keyInterval.value()])
     {
         gScore[node.keyInterval.value()] = node.g;

@@ -12,23 +12,23 @@
 
 namespace {
     inline bool is_cycle_free(const std::shared_ptr<AStarNode>& current, const Vertex& point) {
-        // 检查从parent到current的完整路径
+        // check if there is a cycle from parent to current
         if (!current->parent) return true;
         
-        // 获取从parent到current的完整路径
+        // get the full path from parent to current
         auto parent = current->parent;
         Vertex dir = utils::calculateDirection(parent->pos, current->pos);
         Vertex pos = parent->pos;
         
-        // 检查路径上的每个点
+        // check each point on the path
         while (pos != current->pos) {
             if (pos == point) {
-                return false;  // 发现环路
+                return false;  // found a cycle
             }
             pos = Vertex(pos.x + dir.x, pos.y + dir.y);
         }
         
-        // 递归检查parent的路径
+        // recursively check the path from parent
         return is_cycle_free(parent, point);
     }
 
@@ -55,34 +55,34 @@ namespace {
         std::vector<Vertex> forced_neighbors;
         Vertex from(x, y);
         
-        if (dx != 0) {  // 垂直移动（南/北）
-            Vertex neighbour1(x, y - 1);  // 西边邻居
-            Vertex forced_neighbour1(x + dx, y - 1);  // 西边的强制邻居
+        if (dx != 0) {  // vertical move (south/north)
+            Vertex neighbour1(x, y - 1);  // west neighbor
+            Vertex forced_neighbour1(x + dx, y - 1);  // west forced neighbor
             
             if (!utils::isWalkable(grid, from, neighbour1) && 
                 utils::isWalkable(grid, from, forced_neighbour1)) {
                 forced_neighbors.push_back(Vertex(dx, -1));
             }
             
-            Vertex neighbour2(x, y + 1);  // 东边邻居
-            Vertex forced_neighbour2(x + dx, y + 1);  // 东边的强制邻居
+            Vertex neighbour2(x, y + 1);  // east neighbor
+            Vertex forced_neighbour2(x + dx, y + 1);  // east forced neighbor
             
             if (!utils::isWalkable(grid, from, neighbour2) && 
                 utils::isWalkable(grid, from, forced_neighbour2)) {
                 forced_neighbors.push_back(Vertex(dx, 1));
             }
             
-        } else {  // 水平移动（东/西）
-            Vertex neighbour1(x - 1, y);  // 北边邻居
-            Vertex forced_neighbour1(x - 1, y + dy);  // 北边的强制邻居
+        } else {  // horizontal move (east/west)
+            Vertex neighbour1(x - 1, y);  // north neighbor
+            Vertex forced_neighbour1(x - 1, y + dy);  // north forced neighbor
             
             if (!utils::isWalkable(grid, from, neighbour1) && 
                 utils::isWalkable(grid, from, forced_neighbour1)) {
                 forced_neighbors.push_back(Vertex(-1, dy));
             }
             
-            Vertex neighbour2(x + 1, y);  // 南边邻居
-            Vertex forced_neighbour2(x + 1, y + dy);  // 南边的强制邻居
+            Vertex neighbour2(x + 1, y);  // south neighbor
+            Vertex forced_neighbour2(x + 1, y + dy);  // south forced neighbor
             
             if (!utils::isWalkable(grid, from, neighbour2) && 
                 utils::isWalkable(grid, from, forced_neighbour2)) {
@@ -98,7 +98,7 @@ namespace {
         std::vector<Vertex> neighbors;
         const Vertex& pos = current->pos;
         
-        // If starting node, explore all 8 directions
+        // if starting node, explore all 8 directions
         if (!current->parent) {
             for (const auto& move : Action::DIRECTIONS_8) {
                 if (utils::isWalkable(grid, pos, Vertex(pos.x + move.x, pos.y + move.y))) {
@@ -108,10 +108,10 @@ namespace {
             return neighbors;
         }
     
-        // Calculate incoming direction
+        // calculate incoming direction
         Vertex dir = utils::calculateDirection(current->parent->pos, current->pos);
 
-        // 1. Current diagonal direction
+        // 1. current diagonal direction
         if (utils::isWalkable(grid, pos, Vertex(pos.x + dir.x, pos.y + dir.y))) {
                 neighbors.push_back(dir);
             }
@@ -141,7 +141,7 @@ namespace {
         // 1: n ← step(x, d~)
         Vertex next(x + dx, y + dy);
     
-        // 构建基础日志信息
+        // build basic log information
         std::stringstream base_info;
         base_info << "From (" << x << "," << y << ") with direction (" << dx << "," << dy << ")";
 
@@ -230,24 +230,24 @@ namespace {
 
 std::vector<Vertex> jump_point_search(const Vertex& start, const Vertex& goal,
                          const std::vector<std::vector<int>>& grid) {
-    // 记录开始时间
+    // record start time
     auto start_time = std::chrono::steady_clock::now();
-    const int MAX_SEARCH_TIME = 30;  // 最大搜索时间（秒）
+    const int MAX_SEARCH_TIME = 30;  // maximum search time (seconds)
 
-    // 检查起点和终点是否可通行
+    // check if start and goal are passable
     if(!utils::isPassable(grid, start) || !utils::isPassable(grid, goal)) {
         return {};
     }
 
     std::priority_queue<std::shared_ptr<AStarNode>, std::vector<std::shared_ptr<AStarNode>>, AStarNodeComparator> open_list;
-    std::unordered_map<Vertex, double> closed_list;  // 改用unordered_map存储已访问节点
+    std::unordered_map<Vertex, double> closed_list;  // use unordered_map to store visited nodes
 
-    // 创建并添加起始节点
+    // create and add start node
     auto start_node = std::make_shared<AStarNode>(start, 0, heuristic(start, goal));
     open_list.push(start_node);
 
     while (!open_list.empty()) {
-        // 检查是否超时
+        // check if timeout
         auto current_time = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
         if (elapsed >= MAX_SEARCH_TIME) {
@@ -275,12 +275,12 @@ std::vector<Vertex> jump_point_search(const Vertex& start, const Vertex& goal,
             double move_cost = utils::getMoveCost(current->pos, successor);
             double tentative_g = current->g + move_cost;
 
-            // 检查节点是否在closed list中且新路径不会更优
+            // check if node is in closed list and new path is not better
             if (closed_list.count(successor) && closed_list[successor] <= tentative_g) {
                 continue;
             }
 
-            // 更新或添加到closed list
+            // update or add to closed list
             closed_list[successor] = tentative_g;
 
             double h_value = heuristic(successor, goal);

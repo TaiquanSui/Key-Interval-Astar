@@ -26,10 +26,10 @@ std::vector<SingleAgentResult> BenchmarkUtils::run_scen_file_test(
     SolverInterface* solver,
     double time_limit) {
     
-    // 设置CPU亲和性到最空闲的核心
+    // set CPU affinity to the least busy core
     setCpuAffinity();
     
-    // 加载地图和场景
+    // load map and scenario
     auto grid = load_map(map_file);
     auto agents = load_scen(scen_file, grid);
     
@@ -42,10 +42,10 @@ std::vector<SingleAgentResult> BenchmarkUtils::run_scen_file_test(
     
     logger::log_info("Testing " + map_name + " with " + std::to_string(agents.size()) + " agents using " + solver->get_name());
     
-    // 注意：预处理现在在solver构造函数中完成
+    // note: preprocessing is now done in the solver constructor
     logger::log_info("Solver initialized and ready for testing");
     
-    // 测试每个智能体
+    // test each agent
     for (size_t i = 0; i < agents.size(); ++i) {
         const auto& agent = agents[i];
         
@@ -54,11 +54,11 @@ std::vector<SingleAgentResult> BenchmarkUtils::run_scen_file_test(
         //                " to (" + std::to_string(agent.goal.x) + "," + std::to_string(agent.goal.y) + ")");
         
         try {
-            // 重置扩展节点计数和搜索时间
+            // reset expanded nodes count and search time
             solver->resetExpandedNodes();
             solver->resetSearchTime();
             
-            // 使用异步执行以支持超时
+            // use asynchronous execution to support timeout
             std::future<std::vector<Vertex>> future = 
                 std::async(std::launch::async, 
                          [solver, &agent]() {
@@ -82,13 +82,13 @@ std::vector<SingleAgentResult> BenchmarkUtils::run_scen_file_test(
                 }
             }
             
-            // 使用算法内部的计时
+            // use algorithm's internal timing
             double duration = timeout ? time_limit : solver->getSearchTime();
             
             bool success = !timeout && !path.empty();
             double path_length = success ? path.size() - 1 : 0.0;
             
-            // 获取扩展节点数量
+            // get expanded nodes count
             int nodes_expanded = success ? solver->getExpandedNodes() : -1;
             
             SingleAgentResult result = {
@@ -126,14 +126,14 @@ std::vector<SingleAgentResult> BenchmarkUtils::run_scen_file_test(
         }
     }
     
-    // 恢复线程优先级
+    // restore thread priority
     restore_thread_priority();
     
     return results;
 }
 
 void BenchmarkUtils::run_all_scenarios_test(SolverInterface* solver) {
-    // 设置CPU亲和性到最空闲的核心
+    // set CPU affinity to the least busy core
     setCpuAffinity();
     
     auto map_paths = get_all_map_paths();
@@ -162,14 +162,14 @@ void BenchmarkUtils::run_all_scenarios_test(SolverInterface* solver) {
     };
     
     for (const auto& map_path : map_paths) {
-        std::string map_name = get_map_name(map_path); // 提取地图名
+        std::string map_name = get_map_name(map_path); // extract map name
         if (std::find(listofmaps.begin(), listofmaps.end(), map_name) == listofmaps.end()) {
             continue;
         }
         std::string solver_name = solver->get_name();
         std::string csv_filename = "benchmark_" + solver_name + "_" + map_name + ".csv";
         
-        // 检查是否已经测试过
+        // check if already tested
         fs::path results_dir = fs::path(root_dir) / "benchmark_results" / solver_name;
         fs::path csv_path = results_dir / csv_filename;
         if (fs::exists(csv_path)) {
@@ -177,7 +177,7 @@ void BenchmarkUtils::run_all_scenarios_test(SolverInterface* solver) {
             continue;
         }
         
-        // 确保solver目录存在
+        // ensure results directory exists
         if (!fs::exists(results_dir)) {
             logger::log_info("Creating solver directory: " + results_dir.string());
             if (!fs::create_directories(results_dir)) {
@@ -186,14 +186,14 @@ void BenchmarkUtils::run_all_scenarios_test(SolverInterface* solver) {
         }
         
         logger::log_info("Testing map: " + map_name);
-        
-        // 为当前地图重新进行预处理
+            
+        // preprocess current map
         auto grid = load_map(map_path);
         logger::log_info("Preprocessing map: " + map_name);
         solver->preprocess(grid);
         logger::log_info("Preprocessing completed for map: " + map_name);
         
-        // 测试even和random场景
+        // test even and random scenarios
         fs::path data_dir = fs::path(root_dir) / "data";
         fs::path even_scen_dir = data_dir / "mapf-scen-even";
         fs::path random_scen_dir = data_dir / "mapf-scen-random";
@@ -214,7 +214,7 @@ void BenchmarkUtils::run_all_scenarios_test(SolverInterface* solver) {
                     // logger::log_info("Testing scenario: " + scen_file);
                     auto scenario_results = run_scen_file_test(map_path, scen_file, solver);
                     
-                    // 保存到当前地图的结果中
+                    // save to current map results
                     map_results.insert(map_results.end(), 
                                     scenario_results.begin(), 
                                     scenario_results.end());
@@ -224,13 +224,13 @@ void BenchmarkUtils::run_all_scenarios_test(SolverInterface* solver) {
             }
         }
         
-        // 写入当前地图的结果
+        // write current map results
         write_results_to_csv(csv_filename, map_results, solver_name);
-        // 追加summary到同一个csv文件
+        // append summary to the same csv file
         write_summary_to_csv(csv_filename, map_results, solver);
     }
     
-    // 恢复线程优先级
+    // restore thread priority
     restore_thread_priority();
 }
 
@@ -241,10 +241,10 @@ void BenchmarkUtils::run_single_scenario_test(
     SolverInterface* solver) {
     
     try {
-        // 设置CPU亲和性到最空闲的核心
+        // set CPU affinity to the least busy core
         setCpuAffinity();
         
-        // 构建文件路径
+        // build file path
         std::string root_dir = get_project_root();
         fs::path data_dir = fs::path(root_dir) / "data";
         fs::path map_path = data_dir / "mapf-map" / (map_name + ".map");
@@ -257,7 +257,7 @@ void BenchmarkUtils::run_single_scenario_test(
             scenario_number
         );
         
-        // 检查文件是否存在
+        // check if file exists
         if (!fs::exists(map_path)) {
             logger::log_error("Map file not found: " + map_path.string());
             return;
@@ -270,16 +270,16 @@ void BenchmarkUtils::run_single_scenario_test(
         logger::log_info("Testing map: " + map_name);
         logger::log_info("Testing scenario: " + scen_file);
         
-        // 为当前地图进行预处理
+        // preprocess current map
         auto grid = load_map(map_path.string());
         logger::log_info("Preprocessing map: " + map_name);
         solver->preprocess(grid);
         logger::log_info("Preprocessing completed for map: " + map_name);
         
-        // 运行测试
+        // run test
         auto results = run_scen_file_test(map_path.string(), scen_file, solver, 30);
         
-        // 输出结果
+        // output results
         for (const auto& result : results) {
             logger::log_info("\nTesting result:");
             logger::log_info("Start: (" + std::to_string(result.start.x) + "," + std::to_string(result.start.y) + ")");
@@ -289,24 +289,24 @@ void BenchmarkUtils::run_single_scenario_test(
             logger::log_info("Path length: " + std::to_string(result.path_length));
         }
         
-        // 写入CSV结果文件
+        // write csv result file
         std::string solver_name = solver->get_name();
         std::string csv_filename = solver_name + "_" + map_name + "_" + scenario_type + "_" + std::to_string(scenario_number) + ".csv";
         write_results_to_csv(csv_filename, results, solver_name);
         
-        // 在同一个CSV文件末尾添加汇总统计
+        // append summary to the same csv file
         write_summary_to_csv(csv_filename, results, solver);
         
-        // 计算并输出统计信息
+        // calculate and output statistics
         auto stats = calculate_stats(results);
         stats.print();
         
-        // 恢复线程优先级
+        // restore thread priority
         restore_thread_priority();
         
     } catch (const std::exception& e) {
         logger::log_error("Exception in single scenario test: " + std::string(e.what()));
-        // 确保在异常情况下也恢复线程优先级
+        // ensure thread priority is restored in case of exception
         restore_thread_priority();
     }
 }
@@ -318,7 +318,7 @@ void BenchmarkUtils::run_single_agent_test(
     int agent_index,
     SolverInterface* solver,
     double time_limit) {
-    // 构建文件路径
+    // build file path
     std::string root_dir = get_project_root();
     fs::path data_dir = fs::path(root_dir) / "data";
     fs::path map_path = data_dir / "mapf-map" / (map_name + ".map");
@@ -331,7 +331,7 @@ void BenchmarkUtils::run_single_agent_test(
         scenario_number
     );
     
-    // 检查文件是否存在
+    // check if file exists
     if (!fs::exists(map_path)) {
         logger::log_error("Map file not found: " + map_path.string());
         return;
@@ -343,9 +343,9 @@ void BenchmarkUtils::run_single_agent_test(
     
     logger::log_info("Testing map: " + map_name);
     logger::log_info("Testing scenario: " + scen_file);
-    // 为当前地图进行预处理
+    // preprocess current map
     auto grid = load_map(map_path.string());
-    // 加载场景
+    // load scenario
     auto agents = load_scen(scen_file, grid);
 
 
@@ -363,22 +363,22 @@ void BenchmarkUtils::run_single_agent_test(
     logger::log_info("testing agent " + std::to_string(agent_index) + "  from (" + std::to_string(agent.start.x) + "," + std::to_string(agent.start.y) + ")" +
                         " to (" + std::to_string(agent.goal.x) + "," + std::to_string(agent.goal.y) + ")");
 
-    // 重置计数
+    // reset counters
     solver->resetExpandedNodes();
     solver->resetSearchTime();
     solver->resetSearchMemoryUsage();
 
-    // 搜索
+    // search
     auto path = solver->search(agent.start, agent.goal);
 
-    // 输出结果
+    // output results
     if (!path.empty()) {
         logger::log_info("found path with length: " + std::to_string(path.size()-1));
     } else {
         logger::log_info("no path found");
     }
 
-    // 输出内存信息
+    // output memory information
     double preprocess_mem_mb = static_cast<double>(solver->getPreprocessMemoryUsage()) / (1024 * 1024);
     double search_mem_inc_mb = static_cast<double>(solver->getSearchMemoryIncrease()) / (1024 * 1024);
     logger::log_info("preprocess memory(MB): " + std::to_string(preprocess_mem_mb));
@@ -435,10 +435,10 @@ void BenchmarkUtils::write_results_to_csv(
     try {
         auto file = create_csv_file(filename, solver_name);
         
-        // 写入表头
+        // write header
         file << "Map,Scenario,StartX,StartY,TargetX,TargetY,Success,Runtime,PathLength,NodesExpanded,PreprocessMemory(MB),SearchMemoryIncrease(MB)\n";
         
-        // 写入结果
+        // write results
         for (const auto& result : results) {
             double preprocess_memory_mb = static_cast<double>(result.memory_before) / (1024 * 1024);
             double search_memory_increase_mb = static_cast<double>(result.memory_after) / (1024 * 1024);
@@ -472,14 +472,14 @@ void BenchmarkUtils::write_summary_to_csv(
     SolverInterface* solver) {
     
     try {
-        // 获取项目根目录
+        // get project root directory
         std::string root_dir = get_project_root();
         fs::path results_dir = fs::path(root_dir) / "benchmark_results" / solver->get_name();
         
-        // 构建完整的文件路径
+        // build full file path
         fs::path file_path = results_dir / filename;
         
-        // 以追加模式打开文件
+        // open file in append mode
         std::ofstream file(file_path, std::ios::app);
         if (!file.is_open()) {
             throw std::runtime_error("Unable to append to CSV file: " + file_path.string());
@@ -487,7 +487,7 @@ void BenchmarkUtils::write_summary_to_csv(
         
         auto stats = calculate_stats(all_results);
         
-        // 直接获取solver的预处理时间（适用于单一solver/单一预处理场景）
+        // get solver's preprocessing time (for single solver/single preprocessing scenario)
         file << "\n" << solver->get_name() << " Summary Statistics:\n";
         file << "Total Instances,Successful Instances,Success Rate,Average Runtime,Average Path Length,Average Nodes Expanded,Preprocess Time(s)\n";
         file << stats.total_instances << ","
@@ -560,22 +560,12 @@ std::string BenchmarkUtils::make_scen_path(const std::string& scen_dir,
             (map_name + "-" + type + "-" + std::to_string(index) + ".scen")).string();
 }
 
-double BenchmarkUtils::calculate_path_length(const std::vector<Vertex>& path) {
-    if (path.size() < 2) return 0.0;
-    
-    double length = 0.0;
-    for (size_t i = 1; i < path.size(); ++i) {
-        length += std::abs(path[i].x - path[i-1].x) + std::abs(path[i].y - path[i-1].y);
-    }
-    return length;
-}
-
 std::ofstream BenchmarkUtils::create_csv_file(const std::string& filename, const std::string& solver_name) {
-    // 获取项目根目录
+    // get project root directory
     std::string root_dir = get_project_root();
     fs::path results_dir = fs::path(root_dir) / "benchmark_results" / solver_name;
     
-    // 确保目录存在
+    // ensure directory exists
     if (!fs::exists(results_dir)) {
         logger::log_info("Creating directory: " + results_dir.string());
         if (!fs::create_directories(results_dir)) {
@@ -583,7 +573,7 @@ std::ofstream BenchmarkUtils::create_csv_file(const std::string& filename, const
         }
     }
     
-    // 构建完整的文件路径
+    // build full file path
     fs::path file_path = results_dir / filename;
     logger::log_info("Writing results to: " + file_path.string());
     
@@ -597,7 +587,7 @@ std::ofstream BenchmarkUtils::create_csv_file(const std::string& filename, const
 
 
 
-// 静态成员变量定义
+// static member variable definition
 DWORD_PTR BenchmarkUtils::original_affinity = 0;
 int BenchmarkUtils::original_priority = 0;
 
@@ -608,13 +598,13 @@ void BenchmarkUtils::setCpuAffinity() {
         return;
     }
     
-    // 查找最空闲的CPU核心
+    // find least busy cpu core
     int target_core = find_least_busy_cpu();
     
-    // 优化线程优先级
+    // optimize thread priority
     optimize_thread_priority();
     
-    // Windows实现
+    // Windows implementation
     DWORD_PTR mask = (1ULL << target_core);
     if (SetThreadAffinityMask(GetCurrentThread(), mask)) {
         logger::log_info("Set CPU affinity to core " + std::to_string(target_core) + " on Windows");
@@ -624,7 +614,7 @@ void BenchmarkUtils::setCpuAffinity() {
 }
 
 int BenchmarkUtils::getCpuCoreCount() {
-    // Windows实现
+    // Windows implementation
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
     return sysInfo.dwNumberOfProcessors;
@@ -636,9 +626,9 @@ int BenchmarkUtils::find_least_busy_cpu() {
     int num_cpus = sysinfo.dwNumberOfProcessors;
     
     double min_load = (std::numeric_limits<double>::max)();
-    int selected_cpu = 1;  // 默认从CPU 1开始，避免使用CPU 0
+    int selected_cpu = 1;  // default from CPU 1, avoid using CPU 0
     
-    // 收集每个CPU的负载
+    // collect load of each CPU
     for (int i = 1; i < num_cpus; ++i) {
         double load = get_cpu_load(i);
         if (load < min_load) {
@@ -656,7 +646,7 @@ double BenchmarkUtils::get_cpu_load(int cpu_id) {
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
     
-    // 检查CPU ID是否有效
+    // check if CPU ID is valid
     if (cpu_id < 0 || cpu_id >= static_cast<int>(sysInfo.dwNumberOfProcessors)) {
         logger::log_error("Invalid CPU ID: " + std::to_string(cpu_id));
         return 0.0;
@@ -671,27 +661,27 @@ double BenchmarkUtils::get_cpu_load(int cpu_id) {
     FILETIME idleTime1, kernelTime1, userTime1;
     FILETIME idleTime2, kernelTime2, userTime2;
 
-    // 获取第1次CPU时间
+    // get first CPU time
     if (!GetSystemTimes(&idleTime1, &kernelTime1, &userTime1)) {
         SetThreadAffinityMask(GetCurrentThread(), oldMask);
         logger::log_error("Failed to get first CPU times for CPU " + std::to_string(cpu_id));
         return 0.0;
     }
 
-    // 等待100ms
+    // wait 100ms
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    // 获取第2次CPU时间
+    // get second CPU time
     if (!GetSystemTimes(&idleTime2, &kernelTime2, &userTime2)) {
         SetThreadAffinityMask(GetCurrentThread(), oldMask);
         logger::log_error("Failed to get second CPU times for CPU " + std::to_string(cpu_id));
         return 0.0;
     }
 
-    // 恢复原来的线程亲和性
+    // restore original thread affinity
     SetThreadAffinityMask(GetCurrentThread(), oldMask);
 
-    // 计算时间差
+    // calculate time difference
     ULONGLONG idle1 = (static_cast<ULONGLONG>(idleTime1.dwHighDateTime) << 32) | idleTime1.dwLowDateTime;
     ULONGLONG kernel1 = (static_cast<ULONGLONG>(kernelTime1.dwHighDateTime) << 32) | kernelTime1.dwLowDateTime;
     ULONGLONG user1 = (static_cast<ULONGLONG>(userTime1.dwHighDateTime) << 32) | userTime1.dwLowDateTime;
@@ -710,7 +700,7 @@ double BenchmarkUtils::get_cpu_load(int cpu_id) {
         return 0.0;
     }
 
-    // 计算CPU使用率（返回0-1之间的值）
+    // calculate CPU usage (return value between 0 and 1)
     double cpuUsage = 1.0 - (static_cast<double>(idleDiff) / totalDiff);
     
     // logger::log_info("CPU " + std::to_string(cpu_id) + " load: " + 
@@ -720,15 +710,15 @@ double BenchmarkUtils::get_cpu_load(int cpu_id) {
 }
 
 void BenchmarkUtils::optimize_thread_priority() {
-    // 保存原始设置
+    // save original settings
     HANDLE thread = GetCurrentThread();
     original_affinity = SetThreadAffinityMask(thread, 0);
     original_priority = GetThreadPriority(thread);
     
-    // 设置为高优先级
+    // set to highest priority
     SetThreadPriority(thread, THREAD_PRIORITY_HIGHEST);
     
-    // 设置进程优先级
+    // set process priority
     HANDLE process = GetCurrentProcess();
     SetPriorityClass(process, HIGH_PRIORITY_CLASS);
 }

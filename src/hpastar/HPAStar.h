@@ -11,11 +11,11 @@
 #include <queue>
 #include <string>
 
-// 抽象节点结构 - 移除cluster_id
+// abstract node structure
 struct AbstractNode {
-    Vertex exit;              // 出口点
-    double g_cost;            // 从起点到该节点的代价
-    double h_cost;            // 启发式代价
+    Vertex exit;              // exit point
+    double g_cost;            // cost from start to this node
+    double h_cost;            // heuristic cost
     std::shared_ptr<AbstractNode> parent;
     
     AbstractNode(Vertex ext, double g = 0, double h = 0, 
@@ -25,7 +25,7 @@ struct AbstractNode {
     double f() const { return g_cost + h_cost; }
 };
 
-// 抽象节点比较器
+// abstract node comparator
 struct AbstractNodeComparator {
     bool operator()(const std::shared_ptr<AbstractNode>& a, 
                    const std::shared_ptr<AbstractNode>& b) const {
@@ -36,12 +36,12 @@ struct AbstractNodeComparator {
     }
 };
 
-// 聚类结构
+// cluster structure
 struct Cluster {
     int id;
-    Vertex top_left;          // 左上角坐标
-    Vertex bottom_right;      // 右下角坐标
-    std::unordered_set<Vertex> exits;  // 出口点列表（简化）
+    Vertex top_left;          // top left coordinate
+    Vertex bottom_right;      // bottom right coordinate
+    std::unordered_set<Vertex> exits;  // exit point list (simplified)
     
     Cluster(int cluster_id, Vertex tl, Vertex br) 
         : id(cluster_id), top_left(tl), bottom_right(br), exits() {}
@@ -55,7 +55,7 @@ struct Cluster {
     int height() const { return bottom_right.y - top_left.y + 1; }
 };
 
-// 抽象边结构 - 只保留cost和path
+// abstract edge structure
 struct AbstractEdge {
     double cost;
     AbstractEdge(double c) : cost(c) {}
@@ -63,12 +63,11 @@ struct AbstractEdge {
 };
 
 
-// HPA*算法类
+// HPA* algorithm class
 class HPAStar : public SolverInterface {
 private:
     std::vector<std::vector<int>> grid_;
     std::vector<Cluster> clusters_;
-    // 新版嵌套map
     std::unordered_map<Vertex, std::unordered_map<Vertex, AbstractEdge>> abstract_edges_;
     int cluster_size_;
     int expanded_nodes_;
@@ -85,7 +84,7 @@ public:
           preprocess_time_(0.0), name_(name), memory_before_(0), memory_after_(0), 
           preprocess_memory_(0) {}
     
-    // 实现SolverInterface接口
+    // implement SolverInterface interface
     std::vector<Vertex> search(const Vertex& start, const Vertex& target) override;
     std::string get_name() const override { return name_; }
     int getExpandedNodes() const override { return expanded_nodes_; }
@@ -93,45 +92,45 @@ public:
     double getSearchTime() const override { return search_time_; }
     void resetSearchTime() override { search_time_ = 0.0; }
     
-    // 内存监控接口实现
+    // memory monitoring interface implementation
     size_t getPreprocessMemoryUsage() const override { return preprocess_memory_; }
     size_t getSearchMemoryIncrease() const override;
     void resetSearchMemoryUsage() override;
     double getPreprocessTime() const override { return preprocess_time_; }
     
-    // 新增：直接计算内存使用量
+    // directly calculate memory usage
     size_t getMemoryUsage() const;
     
-    // 预处理接口
+    // preprocessing interface
     void preprocess(const std::vector<std::vector<int>>& grid) override;
 
 private:
-    // 创建聚类
+    // create clusters
     void create_clusters();
     
-    // 识别入口和出口点
+    // identify entrances and exits
     void identify_entrances_and_exits();
     
-    // 计算抽象边
+    // compute abstract edges
     void compute_abstract_edges();
     
-    // 在抽象图上进行搜索
+    // search on abstract graph
     std::vector<Vertex> search_abstract_graph(const Vertex& start, const Vertex& target);
     
-    // 重构完整路径
+    // reconstruct full path
     std::vector<Vertex> reconstruct_path(const std::shared_ptr<AbstractNode>& goal_node, 
                                         const Vertex& start, const Vertex& target);
     
-    // 合并连续的边界点并生成出口点
+    // generate exit points
     std::vector<Vertex> generate_exits_from_boundary(const std::vector<Vertex>& boundary) const;
     
-    // 获取包含指定点的聚类ID
+    // get cluster ID containing specified point
     int get_cluster_id(const Vertex& v) const;
     
-    // 检查两个点是否在同一聚类内
+    // check if two points are in the same cluster
     bool same_cluster(const Vertex& a, const Vertex& b) const;
 
-    // 辅助：根据坐标查找cluster指针
+    // auxiliary: find cluster pointer by position
     Cluster* find_cluster_by_position(int x, int y);
 };
 

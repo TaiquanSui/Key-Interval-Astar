@@ -4,7 +4,7 @@
 #include <functional>
 
 struct Vertex {
-    // x为行坐标，y为列坐标
+    // x is row coordinate, y is column coordinate
     int x, y;
 
     explicit Vertex(int x = 0, int y = 0) : x(x), y(y) {}
@@ -26,7 +26,7 @@ struct Vertex {
     }
 };
 
-// 为 std::hash 提供特化
+// provide specialization for std::hash
 namespace std {
     template<>
     struct hash<Vertex> {
