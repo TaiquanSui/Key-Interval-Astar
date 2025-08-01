@@ -16,7 +16,7 @@ using IntervalKeyHash = Preprocess::IntervalKeyHash;
 using VerticalInterval = Preprocess::VerticalInterval;
 using NeighborTriple = Preprocess::NeighborTriple;
 
-class KeyIntervalAStar : public SolverInterface {
+class KeyIntervalAStarOptimal : public SolverInterface {
 public:
     // define search node structure
     struct SearchNode {
@@ -61,12 +61,34 @@ public:
         std::optional<std::pair<IntervalKey, IntervalKey>> targetRight;
     };
 
+    // new: StateKey structure for more detailed state distinction
+    struct StateKey {
+        IntervalKey intervalKey;
+        Vertex lastWaypoint;
+        std::optional<Vertex> upVertex;
+        std::optional<Vertex> downVertex;
+        bool operator==(const StateKey& other) const {
+            return intervalKey == other.intervalKey &&
+                   lastWaypoint == other.lastWaypoint &&
+                   upVertex == other.upVertex &&
+                   downVertex == other.downVertex;
+        }
+    };
     
+    struct StateKeyHash {
+        size_t operator()(const StateKey& key) const {
+            size_t h1 = IntervalKeyHash{}(key.intervalKey);
+            size_t h2 = std::hash<int>()(key.lastWaypoint.x) ^ (std::hash<int>()(key.lastWaypoint.y) << 1);
+            size_t h3 = key.upVertex ? (std::hash<int>()(key.upVertex->x) ^ (std::hash<int>()(key.upVertex->y) << 1)) : 0;
+            size_t h4 = key.downVertex ? (std::hash<int>()(key.downVertex->x) ^ (std::hash<int>()(key.downVertex->y) << 1)) : 0;
+            return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3);
+        }
+    };
     
     // constructor
-    KeyIntervalAStar(const Preprocess& preprocess, const std::string& name = "KeyIntervalAStar");
+    KeyIntervalAStarOptimal(const Preprocess& preprocess, const std::string& name = "KeyIntervalAStarOptimal");
     // new: default constructor, for lazy initialization
-    KeyIntervalAStar(const std::string& name = "KeyIntervalAStar");
+    KeyIntervalAStarOptimal(const std::string& name = "KeyIntervalAStarOptimal");
 
     // implement SolverInterface interface
     std::vector<Vertex> search(const Vertex& start, const Vertex& target) override;
@@ -108,7 +130,7 @@ private:
     bool handleTargetKeyIntervals(const SearchNode& current, const Vertex& target,
                                 const KeyIntervalQueryResult& queryResult,
                                 std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>>& openList,
-                                std::unordered_map<IntervalKey, double, IntervalKeyHash>& gScore);
+                                std::unordered_map<StateKey, double, StateKeyHash>& gScore);
 
     // handle target key interval
     SearchNode handleTargetKeyInterval(const SearchNode& current,
@@ -123,7 +145,6 @@ private:
                        const NeighborTriple& neighborTriple,
                        const Vertex& target);
 
-    
     SearchNode directTransition(const SearchNode& current,
                         const NeighborTriple& neighborTriple,
                         const Vertex& transitionVertex,
@@ -134,10 +155,10 @@ private:
                         const NeighborTriple& neighborTriple,
                         const Vertex& target);
 
-    // insert node to openList, include g value comparison logic
+    // insert node to openList, include g value comparison logic (using StateKey)
     void insertNode(const SearchNode& node,
                    std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>>& openList,
-                   std::unordered_map<IntervalKey, double, IntervalKeyHash>& gScore);
+                   std::unordered_map<StateKey, double, StateKeyHash>& gScore);
 
     // check if need to add up/down vertex
     bool checkAndAddUpDownVertex(const Vertex& targetVertex, 
@@ -149,7 +170,5 @@ private:
     void initializeStartNode(const Vertex& start, const Vertex& target,
                            const KeyIntervalQueryResult& queryResult,
                            std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>>& openList,
-                           std::unordered_map<IntervalKey, double, IntervalKeyHash>& gScore);
-
-    
+                           std::unordered_map<StateKey, double, StateKeyHash>& gScore);
 }; 
