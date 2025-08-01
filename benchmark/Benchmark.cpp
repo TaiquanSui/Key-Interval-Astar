@@ -8,8 +8,8 @@ int main() {
         logger::log_info("start Key Interval A* benchmark");
         
         // 创建solver（不需要预先预处理）
-        auto solver = std::make_unique<KeyIntervalAStar>();
-        // auto solver = std::make_unique<HPAStar>();
+        // auto solver = std::make_unique<KeyIntervalAStar>();
+        auto solver = std::make_unique<HPAStar>();
         // auto solver = std::make_unique<AStar>();
 
         

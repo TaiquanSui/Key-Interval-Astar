@@ -9,38 +9,35 @@
 #include <cmath>
 
 void HPAStar::preprocess(const std::vector<std::vector<int>>& grid) {
-    //logger::log_info("Preprocessing HPAStar");
+    ////logger::log_info("Preprocessing HPAStar");
     auto start_time = std::chrono::high_resolution_clock::now();
     
     clusters_.clear();
     abstract_edges_.clear();
     
-    // 记录预处理前内存使用
-    size_t memory_before = memory_utils::get_current_memory_usage();
-    
     grid_ = grid;
 
-    //logger::log_info("Creating clusters");
+    ////logger::log_info("Creating clusters");
     // 创建聚类
     create_clusters();
     
-    //logger::log_info("Identifying entrances and exits");
+    ////logger::log_info("Identifying entrances and exits");
     // 识别入口和出口点
     identify_entrances_and_exits();
     
-    //logger::log_info("Computing abstract edges");
+    ////logger::log_info("Computing abstract edges");
     // 计算抽象边
     compute_abstract_edges();
     
-    // 记录预处理后内存使用
-    size_t memory_after = memory_utils::get_current_memory_usage();
-    preprocess_memory_ = memory_after - memory_before;
-    //logger::log_info("Preprocess memory usage: " + std::to_string(preprocess_memory_));
+    // 直接计算内存使用量，而不是使用系统内存监测
+    preprocess_memory_ = getMemoryUsage();
+    
+    ////logger::log_info("Preprocess memory usage: " + std::to_string(preprocess_memory_));
     
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     preprocess_time_ = duration.count() / 1000000.0;
-    //logger::log_info("Preprocessing completed");
+    ////logger::log_info("Preprocessing completed");
 }
 
 void HPAStar::create_clusters() {
@@ -72,10 +69,6 @@ void HPAStar::create_clusters() {
 }
 
 void HPAStar::identify_entrances_and_exits() {
-    // 先清空所有exits
-    for (auto& cluster : clusters_) {
-        cluster.exits.clear();
-    }
     int rows = grid_.size();    // 行数（row）
     int cols = grid_[0].size(); // 列数（col）
     // 只处理右边界和下边界
@@ -88,12 +81,20 @@ void HPAStar::identify_entrances_and_exits() {
             if (utils::isPassable(grid_, v) && utils::isPassable(grid_, Vertex(row, right_col + 1))) {
                 boundary_points.push_back(v);
             } else if (!boundary_points.empty()) {
-                // 处理一个连续区间
                 auto exits = generate_exits_from_boundary(boundary_points);
                 for (const auto& exit : exits) {
-                    cluster.exits.push_back(exit);
+                    //logger::log_info("[HPAStar] exit: (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ")");
+                    cluster.exits.insert(exit);
                     Cluster* right_cluster = find_cluster_by_position(exit.x, exit.y + 1);
-                    if (right_cluster) right_cluster->exits.push_back(Vertex(exit.x, exit.y + 1));
+                    if (right_cluster) {
+                        Vertex right_exit(exit.x, exit.y + 1);
+                        right_cluster->exits.insert(right_exit);
+                        // 直接添加抽象边
+                        abstract_edges_[exit][right_exit] = AbstractEdge(1.0);
+                        abstract_edges_[right_exit][exit] = AbstractEdge(1.0);
+                        //logger::log_info("[HPAStar] abstract_edges: (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ") -> (" + std::to_string(right_exit.x) + "," + std::to_string(right_exit.y) + ")");
+                        //logger::log_info("[HPAStar] abstract_edges: (" + std::to_string(right_exit.x) + "," + std::to_string(right_exit.y) + ") -> (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ")");
+                    }
                 }
                 boundary_points.clear();
             }
@@ -102,9 +103,18 @@ void HPAStar::identify_entrances_and_exits() {
         if (!boundary_points.empty()) {
             auto exits = generate_exits_from_boundary(boundary_points);
             for (const auto& exit : exits) {
-                cluster.exits.push_back(exit);
+                //logger::log_info("[HPAStar] exit: (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ")");
+                cluster.exits.insert(exit);
                 Cluster* right_cluster = find_cluster_by_position(exit.x, exit.y + 1);
-                if (right_cluster) right_cluster->exits.push_back(Vertex(exit.x, exit.y + 1));
+                if (right_cluster) {
+                    Vertex right_exit(exit.x, exit.y + 1);
+                    right_cluster->exits.insert(right_exit);
+                    // 直接添加抽象边
+                    abstract_edges_[exit][right_exit] = AbstractEdge(1.0);
+                    abstract_edges_[right_exit][exit] = AbstractEdge(1.0);
+                    //logger::log_info("[HPAStar] abstract_edges: (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ") -> (" + std::to_string(right_exit.x) + "," + std::to_string(right_exit.y) + ")");
+                    //logger::log_info("[HPAStar] abstract_edges: (" + std::to_string(right_exit.x) + "," + std::to_string(right_exit.y) + ") -> (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ")");
+                }
             }
             boundary_points.clear();
         }
@@ -113,14 +123,23 @@ void HPAStar::identify_entrances_and_exits() {
         int bottom_row = cluster.bottom_right.x; // x 实际为 row
         for (int col = cluster.top_left.y; col <= cluster.bottom_right.y; ++col) { // y 实际为 col
             Vertex v(bottom_row, col);
-            if (utils::isPassable(grid_, v) && bottom_row < rows - 1 && utils::isPassable(grid_, Vertex(bottom_row + 1, col))) {
+            if (utils::isPassable(grid_, v) && utils::isPassable(grid_, Vertex(bottom_row + 1, col))) {
                 boundary_points.push_back(v);
             } else if (!boundary_points.empty()) {
                 auto exits = generate_exits_from_boundary(boundary_points);
                 for (const auto& exit : exits) {
-                    cluster.exits.push_back(exit);
+                    //logger::log_info("[HPAStar] exit: (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ")");
+                    cluster.exits.insert(exit);
                     Cluster* bottom_cluster = find_cluster_by_position(exit.x + 1, exit.y);
-                    if (bottom_cluster) bottom_cluster->exits.push_back(Vertex(exit.x + 1, exit.y));
+                    if (bottom_cluster) {
+                        Vertex bottom_exit(exit.x + 1, exit.y);
+                        bottom_cluster->exits.insert(bottom_exit);
+                        // 直接添加抽象边
+                        abstract_edges_[exit][bottom_exit] = AbstractEdge(1.0);
+                        abstract_edges_[bottom_exit][exit] = AbstractEdge(1.0);
+                        //logger::log_info("[HPAStar] abstract_edges: (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ") -> (" + std::to_string(bottom_exit.x) + "," + std::to_string(bottom_exit.y) + ")");
+                        //logger::log_info("[HPAStar] abstract_edges: (" + std::to_string(bottom_exit.x) + "," + std::to_string(bottom_exit.y) + ") -> (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ")");
+                    }
                 }
                 boundary_points.clear();
             }
@@ -128,25 +147,21 @@ void HPAStar::identify_entrances_and_exits() {
         if (!boundary_points.empty()) {
             auto exits = generate_exits_from_boundary(boundary_points);
             for (const auto& exit : exits) {
-                cluster.exits.push_back(exit);
+                //logger::log_info("[HPAStar] exit: (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ")");
+                cluster.exits.insert(exit);
                 Cluster* bottom_cluster = find_cluster_by_position(exit.x + 1, exit.y);
-                if (bottom_cluster) bottom_cluster->exits.push_back(Vertex(exit.x + 1, exit.y));
+                if (bottom_cluster) {
+                    Vertex bottom_exit(exit.x + 1, exit.y);
+                    bottom_cluster->exits.insert(bottom_exit);
+                    // 直接添加抽象边
+                    abstract_edges_[exit][bottom_exit] = AbstractEdge(1.0);
+                    abstract_edges_[bottom_exit][exit] = AbstractEdge(1.0);
+                    //logger::log_info("[HPAStar] abstract_edges: (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ") -> (" + std::to_string(bottom_exit.x) + "," + std::to_string(bottom_exit.y) + ")");
+                    //logger::log_info("[HPAStar] abstract_edges: (" + std::to_string(bottom_exit.x) + "," + std::to_string(bottom_exit.y) + ") -> (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ")");
+                }
             }
             boundary_points.clear();
         }
-    }
-    // 最后对每个cluster的exits去重
-    for (auto& cluster : clusters_) {
-        std::unordered_set<std::string> exit_set;
-        std::vector<Vertex> unique_exits;
-        for (const auto& v : cluster.exits) {
-            std::string key = std::to_string(v.x) + "," + std::to_string(v.y);
-            if (exit_set.find(key) == exit_set.end()) {
-                exit_set.insert(key);
-                unique_exits.push_back(v);
-            }
-        }
-        cluster.exits = std::move(unique_exits);
     }
 }
 
@@ -164,88 +179,35 @@ Cluster* HPAStar::find_cluster_by_position(int x, int y) {
 std::vector<Vertex> HPAStar::generate_exits_from_boundary(const std::vector<Vertex>& boundary) const {
     const int WIDTH_THRESHOLD = 6;
     std::vector<Vertex> exits;
-    
     if (boundary.empty()) return exits;
-    
-    // 将连续的边界点分组
-    std::vector<std::vector<Vertex>> continuous_groups;
-    std::vector<Vertex> current_group = {boundary[0]};
-    
-    for (size_t i = 1; i < boundary.size(); ++i) {
-        if (abs(boundary[i-1].x - boundary[i].x) + abs(boundary[i-1].y - boundary[i].y) == 1) {
-            current_group.push_back(boundary[i]);
-        } else {
-            if (!current_group.empty()) {
-                continuous_groups.push_back(current_group);
-            }
-            current_group = {boundary[i]};
-        }
+    // 直接对boundary整体生成出口点
+    if (boundary.size() == 1) {
+        exits.push_back(boundary[0]);
+    } else if (boundary.size() < WIDTH_THRESHOLD) {
+        int mid_index = boundary.size() / 2;
+        exits.push_back(boundary[mid_index]);
+    } else {
+        exits.push_back(boundary.front());
+        exits.push_back(boundary.back());
     }
-    
-    // 处理最后一组
-    if (!current_group.empty()) {
-        continuous_groups.push_back(current_group);
-    }
-    
-    // 为每个连续组生成出口点
-    for (const auto& group : continuous_groups) {
-        if (group.size() == 1) {
-            // 单个点：生成一个出口点
-            exits.push_back(group[0]);
-        } else if (group.size() < WIDTH_THRESHOLD) {
-            // 宽度 < 阈值：在组中点生成一个出口点
-            int mid_index = group.size() / 2;
-            exits.push_back(group[mid_index]);
-        } else {
-            // 宽度 ≥ 阈值：在组两端各生成一个出口点
-            exits.push_back(group.front());
-            exits.push_back(group.back());
-        }
-    }
-    
     return exits;
 }
 
 void HPAStar::compute_abstract_edges() {
-    abstract_edges_.clear();
     
     for (const auto& cluster : clusters_) {
-        // 计算聚类内所有出口点到出口点的路径（双向）
-        for (size_t i = 0; i < cluster.exits.size(); ++i) {
-            for (size_t j = 0; j < cluster.exits.size(); ++j) {
-                if (i != j) {
-                    std::vector<Vertex> path = a_star(cluster.exits[i], cluster.exits[j], grid_);
-                    if (!path.empty()) {
-                        double cost = path.size() - 1;
-                        abstract_edges_[cluster.exits[i]][cluster.exits[j]] = AbstractEdge(cost, path);
-                        // 反向边
-                        std::vector<Vertex> reverse_path = path;
-                        std::reverse(reverse_path.begin(), reverse_path.end());
-                        abstract_edges_[cluster.exits[j]][cluster.exits[i]] = AbstractEdge(cost, reverse_path);
-                    }
-                }
-            }
-        }
-        
-        // 计算相邻聚类之间的边（相邻出口点的双向连接）
-        for (const auto& exit : cluster.exits) {
-            for (const auto& other_cluster : clusters_) {
-                if (other_cluster.id != cluster.id) {
-                    // 检查出口是否连接到其他聚类的相邻出口
-                    for (const auto& other_exit : other_cluster.exits) {
-                        // 检查两个出口点是否相邻（曼哈顿距离为1）
-                        int dx = abs(exit.x - other_exit.x);
-                        int dy = abs(exit.y - other_exit.y);
-                        if ((dx == 1 && dy == 0) || (dx == 0 && dy == 1)) {
-                            // 两个出口点相邻，添加双向连接边
-                            std::vector<Vertex> step_path = {exit, other_exit};
-                            abstract_edges_[exit][other_exit] = AbstractEdge(1.0, step_path);
-                            std::vector<Vertex> reverse_step_path = {other_exit, exit};
-                            abstract_edges_[other_exit][exit] = AbstractEdge(1.0, reverse_step_path);
-                            break;
-                        }
-                    }
-
+        // compute_abstract_edges只保留聚类内出口点之间的最短路
+        std::vector<Vertex> exits_vec(cluster.exits.begin(), cluster.exits.end());
+        for (size_t i = 0; i < exits_vec.size(); ++i) {
+            for (size_t j = i + 1; j < exits_vec.size(); ++j) {
+                const Vertex& a = exits_vec[i];
+                const Vertex& b = exits_vec[j];
+                // 使用边界限制的A*搜索，限制在cluster范围内
+                std::vector<Vertex> path = a_star(a, b, grid_, cluster.top_left, cluster.bottom_right);
+                if (!path.empty()) {
+                    double cost = path.size() - 1;
+                    abstract_edges_[a][b] = AbstractEdge(cost);
+                    abstract_edges_[b][a] = AbstractEdge(cost);
                 }
             }
         }
@@ -254,6 +216,7 @@ void HPAStar::compute_abstract_edges() {
 
 
 std::vector<Vertex> HPAStar::search(const Vertex& start, const Vertex& target) {
+    //logger::log_info("[HPAStar] start searching from (" + std::to_string(start.x) + "," + std::to_string(start.y) + ") to (" + std::to_string(target.x) + "," + std::to_string(target.y) + ")");
     auto start_time = std::chrono::high_resolution_clock::now();
     
     memory_before_ = memory_utils::get_current_memory_usage();
@@ -263,10 +226,19 @@ std::vector<Vertex> HPAStar::search(const Vertex& start, const Vertex& target) {
     
     // 如果起点和终点在同一聚类内，直接使用A*
     if (same_cluster(start, target)) {
-        result = a_star(start, target, grid_);
+        //logger::log_info("[HPAStar] start searching in same cluster");
+        // 找到对应的cluster，使用边界限制的A*
+        int cluster_id = get_cluster_id(start);
+        for (const auto& cluster : clusters_) {
+            if (cluster.id == cluster_id) {
+                result = a_star(start, target, grid_);
+                break;
+            }
+        }
         // 注意：a_star函数不返回扩展节点数，这里暂时设为0
         expanded_nodes_ = 0;
     } else {
+        //logger::log_info("[HPAStar] start searching in different clusters");
         // 使用抽象图搜索
         result = search_abstract_graph(start, target);
     }
@@ -281,104 +253,112 @@ std::vector<Vertex> HPAStar::search(const Vertex& start, const Vertex& target) {
 }
 
 std::vector<Vertex> HPAStar::search_abstract_graph(const Vertex& start, const Vertex& target) {
+    //logger::log_info("[HPAStar] start searching in abstract graph");
     std::priority_queue<std::shared_ptr<AbstractNode>, 
                        std::vector<std::shared_ptr<AbstractNode>>, 
                        AbstractNodeComparator> open_list;
     
-    std::unordered_map<Vertex, double, VertexHash> g_values;
+    std::unordered_map<Vertex, double> g_values;
     
     // 获取起点和终点所在的聚类
     int start_cluster = get_cluster_id(start);
     int target_cluster = get_cluster_id(target);
-    
-    // 创建起点和终点的临时抽象节点
-    auto start_node = std::make_shared<AbstractNode>(start, 0.0, heuristic(start, target));
-    auto target_node = std::make_shared<AbstractNode>(target, 0.0, 0.0);
-    
-    // 记录需要删除的临时边
-    std::vector<std::pair<Vertex, Vertex>> temp_edge_keys;
-    
-    // 将起点连接到其聚类的所有出口点
+    //logger::log_info("[HPAStar] start_cluster: " + std::to_string(start_cluster) + ", target_cluster: " + std::to_string(target_cluster));
+
+    // 1. 起点到出口点
     for (const auto& cluster : clusters_) {
         if (cluster.id == start_cluster) {
+            auto start_node = std::make_shared<AbstractNode>(start, 0.0, heuristic(start, target));
+            if(cluster.exits.find(start) != cluster.exits.end()) {
+                open_list.push(start_node);
+                g_values[start] = 0.0;
+                break;
+            }
             for (const auto& exit : cluster.exits) {
-                // 计算从起点到出口点的路径
-                std::vector<Vertex> path = a_star(start, exit, grid_);
+                // 使用边界限制的A*搜索，限制在start cluster范围内
+                std::vector<Vertex> path = a_star(start, exit, grid_, cluster.top_left, cluster.bottom_right);
                 if (!path.empty()) {
                     double cost = path.size() - 1;
-                    abstract_edges_[start][exit] = AbstractEdge(cost, path);
-                    temp_edge_keys.push_back(std::make_pair(start, exit));
-                    
                     auto exit_node = std::make_shared<AbstractNode>(exit, cost, heuristic(exit, target), start_node);
                     open_list.push(exit_node);
                     g_values[exit] = cost;
+                    //logger::log_info("[HPAStar] start_edges: (" + std::to_string(start.x) + "," + std::to_string(start.y) + ") -> (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ")");
                 }
             }
             break;
         }
     }
-    
-    // 将终点连接到其聚类的所有出口点
+
+    // 2. 终点相关
+    std::unordered_map<Vertex, AbstractEdge> target_edges;
     for (const auto& cluster : clusters_) {
         if (cluster.id == target_cluster) {
+            if(cluster.exits.find(target) != cluster.exits.end()) {
+                break;
+            }
             for (const auto& exit : cluster.exits) {
-                // 计算从出口点到终点的路径
-                std::vector<Vertex> path = a_star(exit, target, grid_);
+                // 使用边界限制的A*搜索，限制在target cluster范围内
+                std::vector<Vertex> path = a_star(exit, target, grid_, cluster.top_left, cluster.bottom_right);
                 if (!path.empty()) {
                     double cost = path.size() - 1;
-                    abstract_edges_[exit][target] = AbstractEdge(cost, path);
-                    temp_edge_keys.push_back(std::make_pair(exit, target));
+                    target_edges[exit] = AbstractEdge(cost);
+                    //logger::log_info("[HPAStar] target_edges: (" + std::to_string(exit.x) + "," + std::to_string(exit.y) + ")");
                 }
             }
             break;
         }
     }
-    
+
+    // 3. 搜索
     while (!open_list.empty()) {
         auto current = open_list.top();
         open_list.pop();
         expanded_nodes_++;
+        //logger::log_info("[HPAStar] current node: (" + std::to_string(current->exit.x) + "," + std::to_string(current->exit.y) + ")");
         
-        // 检查是否到达终点
-        if (current->exit == target) {
+        if(current->exit == target) {
             std::vector<Vertex> path = reconstruct_path(current, start, target);
-            for (const auto& key : temp_edge_keys) {
-                abstract_edges_[key.first].erase(key.second);
-                if (abstract_edges_[key.first].empty()) {
-                    abstract_edges_.erase(key.first);
-                }
-            }
             return path;
         }
-        
+
+        // 检查是否能直接到达 target
+        auto it_target = target_edges.find(current->exit);
+        if (it_target != target_edges.end()) {
+            double new_g = current->g_cost + it_target->second.cost;
+            auto target_node = std::make_shared<AbstractNode>(target, new_g, 0.0, current);
+            
+            if(g_values.find(target) == g_values.end() || new_g < g_values[target]) {
+                g_values[target] = new_g;
+                open_list.push(target_node);
+            }
+        }
+
         // 遍历所有抽象边，找到从当前出口点出发的边
         auto from_it = abstract_edges_.find(current->exit);
         if (from_it != abstract_edges_.end()) {
             for (const auto& to_map : from_it->second) {
+                //logger::log_info("[HPAStar] expand abstract_edges: (" + std::to_string(current->exit.x) + "," + std::to_string(current->exit.y) + ") -> (" + std::to_string(to_map.first.x) + "," + std::to_string(to_map.first.y) + ")");
                 const Vertex& to = to_map.first;
                 const AbstractEdge& edge = to_map.second;
                 double new_g = current->g_cost + edge.cost;
+
+                // if (g_values.find(to) != g_values.end()) {
+                //     //logger::log_info("[HPAStar] has already g_value: (" + std::to_string(g_values[to]) + ")");
+                //     if (new_g >= g_values[to]) {
+                //         //logger::log_info("[HPAStar] node with higher g_cost: (" + std::to_string(to.x) + "," + std::to_string(to.y) + ")");
+                //     }
+                // }
+
                 if (g_values.find(to) == g_values.end() || new_g < g_values[to]) {
                     g_values[to] = new_g;
-                    
-                    auto next_node = std::make_shared<AbstractNode>(
-                        to, new_g, heuristic(to, target), current
-                    );
-                    
+                    auto next_node = std::make_shared<AbstractNode>(to, new_g, heuristic(to, target), current);
                     open_list.push(next_node);
+                    //logger::log_info("[HPAStar] push node: (" + std::to_string(to.x) + "," + std::to_string(to.y) + ")");
                 }
             }
         }
     }
-    
-    // 清理临时边
-    for (const auto& key : temp_edge_keys) {
-        abstract_edges_[key.first].erase(key.second);
-        if (abstract_edges_[key.first].empty()) {
-            abstract_edges_.erase(key.first);
-        }
-    }
-    
+    //logger::log_info("[HPAStar] open_list is empty, search failed");
     return std::vector<Vertex>();
 }
 
@@ -396,30 +376,26 @@ std::vector<Vertex> HPAStar::reconstruct_path(const std::shared_ptr<AbstractNode
     if (abstract_path.empty()) {
         return path;
     }
-    // 统一拼接每一段
     for (size_t i = 1; i < abstract_path.size(); ++i) {
-        Vertex from = (i == 1) ? start : abstract_path[i-1]->exit;
+        Vertex from = abstract_path[i-1]->exit;
         Vertex to = abstract_path[i]->exit;
-        auto it_outer = abstract_edges_.find(from);
-        std::vector<Vertex> segment;
-        if (it_outer != abstract_edges_.end()) {
-            auto it_inner = it_outer->second.find(to);
-            if (it_inner != it_outer->second.end()) {
-                segment = it_inner->second.path;
-            } else {
-                segment = a_star(from, to, grid_);
+        std::vector<Vertex> segment = a_star(from, to, grid_);
+        if (segment.empty()) {
+            //logger::log_error("[HPAStar] connect failed: from (" + std::to_string(from.x) + "," + std::to_string(from.y) + ") to (" + std::to_string(to.x) + "," + std::to_string(to.y) + ")");
+            //logger::log_error("[HPAStar] abstract_path:");
+            for (const auto& node : abstract_path) {
+                //logger::log_error("  (" + std::to_string(node->exit.x) + "," + std::to_string(node->exit.y) + ")");
             }
+            return {};
+        }
+        if (i == 1) {
+            path = segment;
         } else {
-            segment = a_star(from, to, grid_);
+            path.insert(path.end(), segment.begin() + 1, segment.end());
         }
-        if (!segment.empty()) {
-            if (!path.empty() && path.back() == segment.front()) {
-                path.insert(path.end(), segment.begin() + 1, segment.end());
-            } else {
-                path.insert(path.end(), segment.begin(), segment.end());
-            }
-        }
+        //logger::log_info("[HPAStar]connect from (" + std::to_string(from.x) + "," + std::to_string(from.y) + ") to (" + std::to_string(to.x) + "," + std::to_string(to.y) + ")");
     }
+    //logger::log_info("[HPAStar] path length: " + std::to_string(path.size()));
     return path;
 }
 
@@ -444,5 +420,32 @@ size_t HPAStar::getSearchMemoryIncrease() const {
 void HPAStar::resetSearchMemoryUsage() {
     memory_before_ = 0;
     memory_after_ = 0;
+} 
+
+size_t HPAStar::getMemoryUsage() const {
+    size_t total_memory = 0;
+    
+    // 计算grid_占用的内存
+    if (!grid_.empty() && !grid_[0].empty()) {
+        total_memory += grid_.size() * grid_[0].size() * sizeof(int);
+    }
+    
+    // 计算clusters_占用的内存
+    for (const auto& cluster : clusters_) {
+        // Cluster结构体大小
+        total_memory += sizeof(Cluster);
+        // exits集合占用的内存
+        total_memory += cluster.exits.size() * sizeof(Vertex);
+    }
+    
+    // 计算abstract_edges_占用的内存
+    for (const auto& [from_vertex, edge_map] : abstract_edges_) {
+        // 外层map的key (Vertex)
+        total_memory += sizeof(Vertex);
+        // 内层map的大小
+        total_memory += edge_map.size() * sizeof(std::pair<Vertex, AbstractEdge>);
+    }
+    
+    return total_memory;
 } 
 

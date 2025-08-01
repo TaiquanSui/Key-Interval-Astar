@@ -81,13 +81,13 @@ std::vector<Vertex> KeyIntervalAStar::search(const Vertex &start, const Vertex &
     {
         SearchNode current = openList.top();
         openList.pop();
-        logger::log_info("current key interval: " + std::to_string(current.keyInterval.has_value() ? current.keyInterval.value().y : -1) + "," + std::to_string(current.keyInterval.has_value() ? current.keyInterval.value().start : -1) + "," + std::to_string(current.keyInterval.has_value() ? current.keyInterval.value().end : -1));
-        logger::log_info("current up vertex: " + (current.upVertex ? std::to_string(current.upVertex.value().x) + "," + std::to_string(current.upVertex.value().y) : "null"));
-        logger::log_info("current down vertex: " + (current.downVertex ? std::to_string(current.downVertex.value().x) + "," + std::to_string(current.downVertex.value().y) : "null"));
-        logger::log_info("from parent: " + (current.parent ? std::to_string(current.parent.value().y) + "," + std::to_string(current.parent.value().start) + "," + std::to_string(current.parent.value().end) : "null"));
-        logger::log_info("current waypoints: " + logger::vectorToString(current.waypoints));
-        logger::log_info("g: " + std::to_string(current.g));
-        logger::log_info("h: " + std::to_string(current.f - current.g));
+        //logger::log_info("current key interval: " + std::to_string(current.keyInterval.has_value() ? current.keyInterval.value().y : -1) + "," + std::to_string(current.keyInterval.has_value() ? current.keyInterval.value().start : -1) + "," + std::to_string(current.keyInterval.has_value() ? current.keyInterval.value().end : -1));
+        //logger::log_info("current up vertex: " + (current.upVertex ? std::to_string(current.upVertex.value().x) + "," + std::to_string(current.upVertex.value().y) : "null"));
+        //logger::log_info("current down vertex: " + (current.downVertex ? std::to_string(current.downVertex.value().x) + "," + std::to_string(current.downVertex.value().y) : "null"));
+        //logger::log_info("from parent: " + (current.parent ? std::to_string(current.parent.value().y) + "," + std::to_string(current.parent.value().start) + "," + std::to_string(current.parent.value().end) : "null"));
+        //logger::log_info("current waypoints: " + //logger::vectorToString(current.waypoints));
+        //logger::log_info("g: " + std::to_string(current.g));
+        //logger::log_info("h: " + std::to_string(current.f - current.g));
 
         // 检查是否到达终点
         if (current.isTarget)
@@ -118,7 +118,7 @@ std::vector<Vertex> KeyIntervalAStar::search(const Vertex &start, const Vertex &
             // 跳过父节点
             if (triple.neighborKeyInterval == current.parent)
                 continue;
-            logger::log_info("handle neighbor: " + std::to_string(triple.neighborKeyInterval.y) + "," + std::to_string(triple.neighborKeyInterval.start) + "," + std::to_string(triple.neighborKeyInterval.end));
+            //logger::log_info("handle neighbor: " + std::to_string(triple.neighborKeyInterval.y) + "," + std::to_string(triple.neighborKeyInterval.start) + "," + std::to_string(triple.neighborKeyInterval.end));
             auto neighborNode = handleNeighbor(current, triple, target);
             insertNode(neighborNode, openList, gScore);
             expanded_nodes_++; // 增加扩展节点计数
@@ -252,7 +252,7 @@ KeyIntervalAStar::SearchNode KeyIntervalAStar::handleNeighbor(const KeyIntervalA
     auto transitionVertex = preprocess_->findTransitionVertex(current.keyInterval.value(), current.fromDirectNeighbor.value(), neighborTriple.currentDirectNeighbor);
     if (transitionVertex.has_value())
     {
-        logger::log_info("find transition vertex: " + std::to_string(transitionVertex.value().x) + "," + std::to_string(transitionVertex.value().y));
+        //logger::log_info("find transition vertex: " + std::to_string(transitionVertex.value().x) + "," + std::to_string(transitionVertex.value().y));
         return directTransition(current, neighborTriple, transitionVertex.value(), target);
     }
 
@@ -271,7 +271,7 @@ KeyIntervalAStar::SearchNode KeyIntervalAStar::directTransition(const KeyInterva
 
     if (checkAndAddUpDownVertex(transitionVertex, current.waypoints.back(), newWaypoints, current))
     {
-        logger::log_info("up/down vertex added: " + std::to_string(newWaypoints.back().x) + "," + std::to_string(newWaypoints.back().y));
+        //logger::log_info("up/down vertex added: " + std::to_string(newWaypoints.back().x) + "," + std::to_string(newWaypoints.back().y));
         newWaypoints.push_back(transitionVertex);
         auto [g, h] = calcGAndH(newWaypoints, neighborTriple.neighborKeyInterval, target);
 
@@ -304,7 +304,7 @@ KeyIntervalAStar::SearchNode KeyIntervalAStar::handleUpDownVertex(const KeyInter
                                                                   const NeighborTriple &neighborTriple,
                                                                   const Vertex &target)
 {
-    logger::log_info("handle up/down vertex");
+    //logger::log_info("handle up/down vertex");
     const auto &neighborInterval = preprocess_->getKeyIntervals().at(neighborTriple.neighborKeyInterval);
 
     std::optional<Vertex> tempUpVertex = current.upVertex;
@@ -319,7 +319,7 @@ KeyIntervalAStar::SearchNode KeyIntervalAStar::handleUpDownVertex(const KeyInter
         newWaypoints.push_back(current.downVertex.value());
         newWaypoints.push_back(Vertex(neighborInterval.getEnd(), neighborInterval.getY()));
         shouldBreak = true;
-        logger::log_info("new waypoints: " + logger::vectorToString(newWaypoints));
+        //logger::log_info("new waypoints: " + //logger::vectorToString(newWaypoints));
     }
 
     if (!shouldBreak && 
@@ -330,7 +330,7 @@ KeyIntervalAStar::SearchNode KeyIntervalAStar::handleUpDownVertex(const KeyInter
         newWaypoints.push_back(current.upVertex.value());
         newWaypoints.push_back(Vertex(neighborInterval.getStart(), neighborInterval.getY()));
         shouldBreak = true;
-        logger::log_info("new waypoints: " + logger::vectorToString(newWaypoints));
+        //logger::log_info("new waypoints: " + //logger::vectorToString(newWaypoints));
     }
 
     if (!shouldBreak) {
@@ -338,14 +338,14 @@ KeyIntervalAStar::SearchNode KeyIntervalAStar::handleUpDownVertex(const KeyInter
         if (upV) {
             if (!tempUpVertex || upV.value().x < tempUpVertex.value().x){
                 tempUpVertex = upV;
-                logger::log_info("update up vertex: " + std::to_string(tempUpVertex.value().x) + "," + std::to_string(tempUpVertex.value().y));
+                //logger::log_info("update up vertex: " + std::to_string(tempUpVertex.value().x) + "," + std::to_string(tempUpVertex.value().y));
             }
         }
         std::optional<Vertex> downV = neighborInterval.getDownVertex();
         if (downV) {
             if (!tempDownVertex || downV.value().x > tempDownVertex.value().x){
                 tempDownVertex = downV;
-                logger::log_info("update down vertex: " + std::to_string(tempDownVertex.value().x) + "," + std::to_string(tempDownVertex.value().y));
+                //logger::log_info("update down vertex: " + std::to_string(tempDownVertex.value().x) + "," + std::to_string(tempDownVertex.value().y));
             }
         }
     }
@@ -410,19 +410,19 @@ KeyIntervalAStar::SearchNode KeyIntervalAStar::handleTargetKeyInterval(const Key
                                                                        const IntervalKey &targetFromDirectNeighbor,
                                                                        const Vertex &target)
 {
-    logger::log_info("handle target key interval: " + std::to_string(current.keyInterval.value().y) + "," + std::to_string(current.keyInterval.value().start) + "," + std::to_string(current.keyInterval.value().end));
+    //logger::log_info("handle target key interval: " + std::to_string(current.keyInterval.value().y) + "," + std::to_string(current.keyInterval.value().start) + "," + std::to_string(current.keyInterval.value().end));
     std::vector<Vertex> finalWaypoints = current.waypoints;
 
     const auto &endKeyInterval = preprocess_->getKeyIntervals().at(current.keyInterval.value());
-    logger::log_info("current from direct neighbor: " + std::to_string(current.fromDirectNeighbor.value().y) + "," + std::to_string(current.fromDirectNeighbor.value().start) + "," + std::to_string(current.fromDirectNeighbor.value().end));
-    logger::log_info("target from direct neighbor: " + std::to_string(targetFromDirectNeighbor.y) + "," + std::to_string(targetFromDirectNeighbor.start) + "," + std::to_string(targetFromDirectNeighbor.end));
+    //logger::log_info("current from direct neighbor: " + std::to_string(current.fromDirectNeighbor.value().y) + "," + std::to_string(current.fromDirectNeighbor.value().start) + "," + std::to_string(current.fromDirectNeighbor.value().end));
+    //logger::log_info("target from direct neighbor: " + std::to_string(targetFromDirectNeighbor.y) + "," + std::to_string(targetFromDirectNeighbor.start) + "," + std::to_string(targetFromDirectNeighbor.end));
 
     auto transitionVertexOpt = preprocess_->findTransitionVertex(current.keyInterval.value(), current.fromDirectNeighbor.value(), targetFromDirectNeighbor);
 
     if (transitionVertexOpt.has_value())
     {
         Vertex transitionVertex = transitionVertexOpt.value();
-        logger::log_info("find transition vertex: " + std::to_string(transitionVertex.x) + "," + std::to_string(transitionVertex.y));
+        //logger::log_info("find transition vertex: " + std::to_string(transitionVertex.x) + "," + std::to_string(transitionVertex.y));
 
         if (checkAndAddUpDownVertex(transitionVertex, current.waypoints.back(), finalWaypoints, current))
         {
@@ -444,7 +444,7 @@ KeyIntervalAStar::SearchNode KeyIntervalAStar::handleTargetKeyInterval(const Key
         }
         else
         {
-            logger::log_info("no up/down vertex found before transition vertex for target");
+            //logger::log_info("no up/down vertex found before transition vertex for target");
             finalWaypoints.push_back(transitionVertex);
             finalWaypoints.push_back(target);
 
@@ -475,11 +475,11 @@ KeyIntervalAStar::SearchNode KeyIntervalAStar::handleTargetKeyInterval(const Key
         g += heuristic(finalWaypoints[i - 1], finalWaypoints[i]);
     }
 
-    logger::log_info("final waypoints: " + logger::vectorToString(finalWaypoints));
+    //logger::log_info("final waypoints: " + //logger::vectorToString(finalWaypoints));
 
     KeyIntervalAStar::SearchNode targetNode(std::nullopt, g, g, current.keyInterval, std::nullopt,
                                             std::nullopt, std::nullopt, finalWaypoints, true);
-    logger::log_info("push target node");
+    //logger::log_info("push target node");
     return targetNode;
 }
 
@@ -490,14 +490,14 @@ std::pair<double, double> KeyIntervalAStar::calcGAndH(const std::vector<Vertex> 
     double gValue = 0.0;
     double hValue = 0.0;
 
-    logger::log_info("calculate g and h for evaluation interval: " + std::to_string(evaluationInterval.y) + "," + std::to_string(evaluationInterval.start) + "," + std::to_string(evaluationInterval.end));
-    logger::log_info("waypoints: " + logger::vectorToString(waypoints));
+    //logger::log_info("calculate g and h for evaluation interval: " + std::to_string(evaluationInterval.y) + "," + std::to_string(evaluationInterval.start) + "," + std::to_string(evaluationInterval.end));
+    //logger::log_info("waypoints: " + //logger::vectorToString(waypoints));
 
     // 计算waypoints中相邻点之间的代价
     for (size_t i = 1; i < waypoints.size(); ++i)
     {
         gValue += heuristic(waypoints[i - 1], waypoints[i]);
-        logger::log_info("gValue += heuristic(" + std::to_string(waypoints[i - 1].x) + "," + std::to_string(waypoints[i - 1].y) + "," + std::to_string(waypoints[i].x) + "," + std::to_string(waypoints[i].y) + "): " + std::to_string(gValue));
+        //logger::log_info("gValue += heuristic(" + std::to_string(waypoints[i - 1].x) + "," + std::to_string(waypoints[i - 1].y) + "," + std::to_string(waypoints[i].x) + "," + std::to_string(waypoints[i].y) + "): " + std::to_string(gValue));
     }
 
     // 计算最后一段的代价
@@ -507,7 +507,7 @@ std::pair<double, double> KeyIntervalAStar::calcGAndH(const std::vector<Vertex> 
         if (target.x <= evaluationInterval.start)
         {
             Vertex evaluationVertex = Vertex(evaluationInterval.start, evaluationInterval.y);
-            logger::log_info("evaluation vertex: " + std::to_string(evaluationVertex.x) + "," + std::to_string(evaluationVertex.y));
+            //logger::log_info("evaluation vertex: " + std::to_string(evaluationVertex.x) + "," + std::to_string(evaluationVertex.y));
             // 如果目标x小于等于interval的start
             gValue += heuristic(waypoints.back(), evaluationVertex);
             hValue = heuristic(evaluationVertex, target);
@@ -515,7 +515,7 @@ std::pair<double, double> KeyIntervalAStar::calcGAndH(const std::vector<Vertex> 
         else if (target.x >= evaluationInterval.end)
         {
             Vertex evaluationVertex = Vertex(evaluationInterval.end, evaluationInterval.y);
-            logger::log_info("evaluation vertex: " + std::to_string(evaluationVertex.x) + "," + std::to_string(evaluationVertex.y));
+            //logger::log_info("evaluation vertex: " + std::to_string(evaluationVertex.x) + "," + std::to_string(evaluationVertex.y));
             // 如果目标x大于等于interval的end
             gValue += heuristic(waypoints.back(), evaluationVertex);
             hValue = heuristic(evaluationVertex, target);
@@ -523,7 +523,7 @@ std::pair<double, double> KeyIntervalAStar::calcGAndH(const std::vector<Vertex> 
         else
         {
             Vertex evaluationVertex = Vertex(target.x, evaluationInterval.y);
-            logger::log_info("evaluation vertex: " + std::to_string(evaluationVertex.x) + "," + std::to_string(evaluationVertex.y));
+            //logger::log_info("evaluation vertex: " + std::to_string(evaluationVertex.x) + "," + std::to_string(evaluationVertex.y));
             // 如果目标x在interval的范围内
             gValue += heuristic(waypoints.back(), evaluationVertex);
             hValue = heuristic(evaluationVertex, target);
@@ -531,18 +531,18 @@ std::pair<double, double> KeyIntervalAStar::calcGAndH(const std::vector<Vertex> 
     }
     else
     {
-        logger::log_info("calculate g and h with last waypoint in current key interval: " + std::to_string(waypoints.back().x) + "," + std::to_string(waypoints.back().y));
+        //logger::log_info("calculate g and h with last waypoint in current key interval: " + std::to_string(waypoints.back().x) + "," + std::to_string(waypoints.back().y));
         hValue = heuristic(waypoints.back(), target);
     }
 
-    logger::log_info("gValue: " + std::to_string(gValue) + ", hValue: " + std::to_string(hValue));
+    //logger::log_info("gValue: " + std::to_string(gValue) + ", hValue: " + std::to_string(hValue));
 
     return std::make_pair(gValue, hValue);
 }
 
 std::vector<Vertex> KeyIntervalAStar::constructPath(std::vector<Vertex> waypoints) const
 {
-    logger::log_info("construct path with waypoints: " + logger::vectorToString(waypoints));
+    //logger::log_info("construct path with waypoints: " + //logger::vectorToString(waypoints));
     //  使用waypoints重建完整路径
     std::vector<Vertex> path;
     if (waypoints.empty())
@@ -574,7 +574,7 @@ std::vector<Vertex> KeyIntervalAStar::constructPath(std::vector<Vertex> waypoint
         else
         {
             // 若A*失败
-            logger::log_error("A* failed with waypoints: " + logger::vectorToString(waypoints));
+            //logger::log_error("A* failed with waypoints: " + //logger::vectorToString(waypoints));
             return {};
         }
     }
@@ -597,7 +597,7 @@ void KeyIntervalAStar::insertNode(const SearchNode &node,
     {
         gScore[node.keyInterval.value()] = node.g;
         openList.push(node);
-        logger::log_info("push new node: " + std::to_string(node.keyInterval.value().y) + "," + std::to_string(node.keyInterval.value().start) + "," + std::to_string(node.keyInterval.value().end));
+        //logger::log_info("push new node: " + std::to_string(node.keyInterval.value().y) + "," + std::to_string(node.keyInterval.value().start) + "," + std::to_string(node.keyInterval.value().end));
     }
 }
 
@@ -611,7 +611,7 @@ bool KeyIntervalAStar::checkAndAddUpDownVertex(const Vertex &targetVertex,
         lastWaypoint.x < current.downVertex.value().x)
     {
         waypoints.push_back(current.downVertex.value());
-        logger::log_info("add down vertex: " + std::to_string(current.downVertex.value().x) + "," + std::to_string(current.downVertex.value().y));
+        //logger::log_info("add down vertex: " + std::to_string(current.downVertex.value().x) + "," + std::to_string(current.downVertex.value().y));
         return true;
     }
 
@@ -620,7 +620,7 @@ bool KeyIntervalAStar::checkAndAddUpDownVertex(const Vertex &targetVertex,
         lastWaypoint.x > current.upVertex.value().x)
     {
         waypoints.push_back(current.upVertex.value());
-        logger::log_info("add up vertex: " + std::to_string(current.upVertex.value().x) + "," + std::to_string(current.upVertex.value().y));
+        //logger::log_info("add up vertex: " + std::to_string(current.upVertex.value().x) + "," + std::to_string(current.upVertex.value().y));
         return true;
     }
     return false;

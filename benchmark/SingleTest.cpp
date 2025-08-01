@@ -12,7 +12,7 @@ int main() {
         std::string map_name = "room-64-64-16";
 
         std::string scenario_type = "even";  // even 或 "random"
-        int scenario_number = 1;  // 场景编号 1-25
+        int scenario_number = 2;  // 场景编号 1-25
 
         logger::log_info("Start testing Key Interval A* algorithm");
         logger::log_info("Map: " + map_name);
@@ -32,10 +32,10 @@ int main() {
         
         // 加载地图并创建solver
         auto grid = load_map(map_path.string());
-        auto solver = std::make_unique<KeyIntervalAStar>();
-        // auto solver = std::make_unique<HPAStar>();
+        // auto solver = std::make_unique<KeyIntervalAStar>();
+        auto solver = std::make_unique<HPAStar>();
         
-        // 运行单个场景测试
+        //运行单个场景测试
         // BenchmarkUtils::run_single_scenario_test(
         //     map_name,
         //     scenario_type,
@@ -47,10 +47,10 @@ int main() {
             map_name,
             scenario_type,
             scenario_number,
-            335,
+            117,
             solver.get()
         );
-        
+
         logger::log_info("Testing completed");
         
     } catch (const std::exception& e) {

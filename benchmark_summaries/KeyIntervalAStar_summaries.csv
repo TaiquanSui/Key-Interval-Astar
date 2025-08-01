@@ -1,0 +1,20 @@
+Map,Algorithm,Average Nodes Expanded,Average Path Length,Average Runtime,AvgSearchMemoryIncrease(MB),MaxSearchMemoryIncrease(MB),MinSearchMemoryIncrease(MB),Preprocess Time(ms),PreprocessMemory(MB),StdSearchMemoryIncrease(MB),Success Rate,Successful Instances,Total Instances
+benchmark_KeyIntervalAStar_Berlin_1_256,KeyIntervalAStar_with_g_score,69.73,207.08,0.08,2.421159715157682e-05,0.05,0.0,2.1710000000000003,0.67,0.0008708129081752236,1.0,49150.0,49150.0
+benchmark_KeyIntervalAStar_Boston_0_256,KeyIntervalAStar_with_g_score,133.27,220.56,0.14300000000000002,2.7914614121510688e-05,0.04,0.0,3.249,0.79,0.0008942669540786759,1.0,48720.0,48720.0
+benchmark_KeyIntervalAStar_den312d,KeyIntervalAStar_with_g_score,17.89,56.27,0.025,5.297600498597694e-06,0.02,0.0,0.266,0.08,0.000310765568618377,1.0,32090.0,32090.0
+benchmark_KeyIntervalAStar_empty-48-48,KeyIntervalAStar_with_g_score,0.0,31.63,0.015000000000000001,0.0,0.0,0.0,0.068,0.02,0.0,1.0,53800.0,53800.0
+benchmark_KeyIntervalAStar_lak303d,KeyIntervalAStar_with_g_score,120.74,217.39,0.153,0.00010422424003158299,0.07,0.0,1.484,0.38,0.0017278843157741432,1.0,50660.0,50660.0
+benchmark_KeyIntervalAStar_maze-128-128-1,KeyIntervalAStar_with_g_score,494.59,387.41,0.637,0.00011319218241042297,0.13,0.0,4.986,1.13,0.0020913449986402714,1.0,73680.0,73680.0
+benchmark_KeyIntervalAStar_maze-128-128-10,KeyIntervalAStar_with_g_score,23.95,223.07,0.030000000000000002,5.763688760806916e-07,0.02,0.0,0.655,0.22,9.800926350904015e-05,1.0,52050.0,52050.0
+benchmark_KeyIntervalAStar_maze-32-32-2,KeyIntervalAStar_with_g_score,19.52,52.78,0.022,0.0,0.0,0.0,0.156,0.05,0.0,1.0,14285.0,14285.0
+benchmark_KeyIntervalAStar_orz900d,KeyIntervalAStar_with_g_score,445.6,1415.44,0.532,2.9632152588555876e-05,0.11,0.0,8.299000000000001,4.64,0.001153631572359128,1.0,29360.0,29360.0
+benchmark_KeyIntervalAStar_Paris_1_256,KeyIntervalAStar_with_g_score,156.16,229.54,0.177,0.0001169488227281569,0.1,0.0,2.68,0.8,0.00253865671668657,1.0,51390.0,51390.0
+benchmark_KeyIntervalAStar_random-32-32-20,KeyIntervalAStar_with_g_score,52.3,23.13,0.13699999999999998,2.2524271844660196e-05,0.02,0.0,0.342,0.08,0.0005057700433888546,1.0,12875.0,12875.0
+benchmark_KeyIntervalAStar_random-64-64-10,KeyIntervalAStar_with_g_score,119.73,44.7,0.354,2.420424403183025e-05,0.04,0.0,0.8809999999999999,0.21,0.0007071614275004969,1.0,30160.0,30160.0
+benchmark_KeyIntervalAStar_random-64-64-20,KeyIntervalAStar_with_g_score,135.49,46.6,0.322,4.193971166448233e-05,0.05,0.0,1.2650000000000001,0.29,0.001038989534083631,1.0,30520.0,30520.0
+benchmark_KeyIntervalAStar_room-32-32-4,KeyIntervalAStar_with_g_score,33.53,26.18,0.083,1.3858813339107842e-05,0.02,0.0,0.217,0.06,0.000455730329668148,1.0,11545.0,11545.0
+benchmark_KeyIntervalAStar_room-64-64-16,KeyIntervalAStar_with_g_score,36.83,76.3,0.046,2.2889842632331905e-06,0.02,0.0,0.232,0.07,0.00020012992069571705,1.0,34950.0,34950.0
+benchmark_KeyIntervalAStar_room-64-64-8,KeyIntervalAStar_with_g_score,35.98,61.98,0.059,1.8399264029438825e-06,0.02,0.0,0.39599999999999996,0.12,0.00015661726185211284,1.0,32610.0,32610.0
+benchmark_KeyIntervalAStar_warehouse-10-20-10-2-1,KeyIntervalAStar_with_g_score,195.26,84.51,13.142,9.842410837710805e-05,0.14,0.0,2.6020000000000003,0.65,0.002312648743911695,1.0,36170.0,36170.0
+benchmark_KeyIntervalAStar_warehouse-10-20-10-2-2,KeyIntervalAStar_with_g_score,204.33,94.45,7.051,0.00011361804995970976,0.13,0.0,2.22,0.67,0.0025716662918702864,1.0,37230.0,37230.0
+benchmark_KeyIntervalAStar_w_woundedcoast,KeyIntervalAStar_with_g_score,75.21,476.29,0.078,0.0,0.0,0.0,3.337,1.84,0.0,1.0,77520.0,77520.0

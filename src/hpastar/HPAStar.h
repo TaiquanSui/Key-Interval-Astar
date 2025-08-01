@@ -41,10 +41,10 @@ struct Cluster {
     int id;
     Vertex top_left;          // 左上角坐标
     Vertex bottom_right;      // 右下角坐标
-    std::vector<Vertex> exits;  // 出口点列表（简化）
+    std::unordered_set<Vertex> exits;  // 出口点列表（简化）
     
     Cluster(int cluster_id, Vertex tl, Vertex br) 
-        : id(cluster_id), top_left(tl), bottom_right(br) {}
+        : id(cluster_id), top_left(tl), bottom_right(br), exits() {}
     
     bool contains(const Vertex& v) const {
         return v.x >= top_left.x && v.x <= bottom_right.x &&
@@ -58,17 +58,10 @@ struct Cluster {
 // 抽象边结构 - 只保留cost和path
 struct AbstractEdge {
     double cost;
-    std::vector<Vertex> path;
-    AbstractEdge(double c, std::vector<Vertex> p = {}) : cost(c), path(std::move(p)) {}
-    AbstractEdge() : cost(0.0), path() {}
+    AbstractEdge(double c) : cost(c) {}
+    AbstractEdge() : cost(0.0) {}
 };
 
-// 顶点哈希函数
-struct VertexHash {
-    std::size_t operator()(const Vertex& v) const {
-        return std::hash<int>()(v.x) ^ (std::hash<int>()(v.y) << 1);
-    }
-};
 
 // HPA*算法类
 class HPAStar : public SolverInterface {
@@ -76,7 +69,7 @@ private:
     std::vector<std::vector<int>> grid_;
     std::vector<Cluster> clusters_;
     // 新版嵌套map
-    std::unordered_map<Vertex, std::unordered_map<Vertex, AbstractEdge, VertexHash>, VertexHash> abstract_edges_;
+    std::unordered_map<Vertex, std::unordered_map<Vertex, AbstractEdge>> abstract_edges_;
     int cluster_size_;
     int expanded_nodes_;
     double search_time_;
@@ -105,6 +98,9 @@ public:
     size_t getSearchMemoryIncrease() const override;
     void resetSearchMemoryUsage() override;
     double getPreprocessTime() const override { return preprocess_time_; }
+    
+    // 新增：直接计算内存使用量
+    size_t getMemoryUsage() const;
     
     // 预处理接口
     void preprocess(const std::vector<std::vector<int>>& grid) override;

@@ -83,4 +83,9 @@ std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
                           const std::vector<std::vector<int>>& grid,
                           const std::vector<Vertex>& directions);
 
+// 支持边界限制的A*搜索
+std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
+                          const std::vector<std::vector<int>>& grid,
+                          const Vertex& top_left, const Vertex& bottom_right);
+
 #endif // ASTAR_H

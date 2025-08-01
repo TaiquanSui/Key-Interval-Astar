@@ -86,7 +86,7 @@ std::vector<SingleAgentResult> BenchmarkUtils::run_scen_file_test(
             double duration = timeout ? time_limit : solver->getSearchTime();
             
             bool success = !timeout && !path.empty();
-            double path_length = success ? calculate_path_length(path) : 0.0;
+            double path_length = success ? path.size() - 1 : 0.0;
             
             // 获取扩展节点数量
             int nodes_expanded = success ? solver->getExpandedNodes() : -1;
@@ -140,16 +140,16 @@ void BenchmarkUtils::run_all_scenarios_test(SolverInterface* solver) {
     std::string root_dir = get_project_root();
 
     std::vector<std::string> listofmaps = {
-        "Berlin_1_256", 
-        "Boston_0_256", 
+        "Berlin_1_256",
+        "Boston_0_256",
         "Paris_1_256",
-        "den312d", 
+        "den312d",
         "empty-48-48",
         "lak303d",
         "maze-32-32-2",
         "maze-128-128-1",
         "maze-128-128-10",
-        // "orz900d",
+        "orz900d",
         "random-32-32-20",
         "random-64-64-10",
         "random-64-64-20",
@@ -318,41 +318,42 @@ void BenchmarkUtils::run_single_agent_test(
     int agent_index,
     SolverInterface* solver,
     double time_limit) {
-        // 构建文件路径
-        std::string root_dir = get_project_root();
-        fs::path data_dir = fs::path(root_dir) / "data";
-        fs::path map_path = data_dir / "mapf-map" / (map_name + ".map");
-        fs::path scen_dir = data_dir / ("mapf-scen-" + scenario_type);
-        
-        std::string scen_file = make_scen_path(
-            scen_dir.string(), 
-            map_name, 
-            scenario_type, 
-            scenario_number
-        );
-        
-        // 检查文件是否存在
-        if (!fs::exists(map_path)) {
-            logger::log_error("Map file not found: " + map_path.string());
-            return;
-        }
-        if (!fs::exists(scen_file)) {
-            logger::log_error("Scen file not found: " + scen_file);
-            return;
-        }
-        
-        logger::log_info("Testing map: " + map_name);
-        logger::log_info("Testing scenario: " + scen_file);
-
-        // 为当前地图进行预处理
-        auto grid = load_map(map_path.string());
-        logger::log_info("Preprocessing map: " + map_name);
-        solver->preprocess(grid);
-        logger::log_info("Preprocessing completed for map: " + map_name);
-
+    // 构建文件路径
+    std::string root_dir = get_project_root();
+    fs::path data_dir = fs::path(root_dir) / "data";
+    fs::path map_path = data_dir / "mapf-map" / (map_name + ".map");
+    fs::path scen_dir = data_dir / ("mapf-scen-" + scenario_type);
+    
+    std::string scen_file = make_scen_path(
+        scen_dir.string(), 
+        map_name, 
+        scenario_type, 
+        scenario_number
+    );
+    
+    // 检查文件是否存在
+    if (!fs::exists(map_path)) {
+        logger::log_error("Map file not found: " + map_path.string());
+        return;
+    }
+    if (!fs::exists(scen_file)) {
+        logger::log_error("Scen file not found: " + scen_file);
+        return;
+    }
+    
+    logger::log_info("Testing map: " + map_name);
+    logger::log_info("Testing scenario: " + scen_file);
+    // 为当前地图进行预处理
+    auto grid = load_map(map_path.string());
     // 加载场景
     auto agents = load_scen(scen_file, grid);
 
+
+    logger::log_info("Preprocessing map: " + map_name);
+    solver->preprocess(grid);
+    logger::log_info("Preprocessing completed for map: " + map_name);
+
+    
     if (agent_index < 0 || agent_index >= agents.size()) {
         logger::log_error("agent_index out of range");
         return;
@@ -372,7 +373,7 @@ void BenchmarkUtils::run_single_agent_test(
 
     // 输出结果
     if (!path.empty()) {
-        logger::log_info("found path, length: " + std::to_string(path.size()-1));
+        logger::log_info("found path with length: " + std::to_string(path.size()-1));
     } else {
         logger::log_info("no path found");
     }

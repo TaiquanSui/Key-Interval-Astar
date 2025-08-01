@@ -129,6 +129,7 @@ std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
     auto start_time = std::chrono::steady_clock::now();
 
     if(!utils::isPassable(grid, start) || !utils::isPassable(grid, goal)) {
+        logger::log_info("Start or goal is not passable");
         return {};
     }
     std::priority_queue<std::shared_ptr<AStarNode>, 
@@ -276,4 +277,76 @@ size_t AStar::getSearchMemoryIncrease() const {
 void AStar::resetSearchMemoryUsage() {
     memory_before_ = 0;
     memory_after_ = 0;
+}
+
+// 新增：支持边界限制的A*搜索
+std::vector<Vertex> a_star(const Vertex& start, const Vertex& goal,
+                          const std::vector<std::vector<int>>& grid,
+                          const Vertex& top_left, const Vertex& bottom_right) {
+    auto start_time = std::chrono::steady_clock::now();
+
+    if(!utils::isPassable(grid, start) || !utils::isPassable(grid, goal)) {
+        return {};
+    }
+    
+    // 检查起点和终点是否在指定边界内
+    if (start.x < top_left.x || start.x > bottom_right.x || 
+        start.y < top_left.y || start.y > bottom_right.y ||
+        goal.x < top_left.x || goal.x > bottom_right.x || 
+        goal.y < top_left.y || goal.y > bottom_right.y) {
+        return {};
+    }
+    
+    std::priority_queue<std::shared_ptr<AStarNode>, 
+                       std::vector<std::shared_ptr<AStarNode>>, 
+                       AStarNodeComparator> open_list;
+    std::unordered_map<Vertex, double> closed_list;
+
+    auto start_node = std::make_shared<AStarNode>(start, 0, heuristic(start, goal));
+    open_list.push(start_node);
+
+    while (!open_list.empty()) {
+        auto current_time = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
+        if (elapsed >= MAX_SEARCH_TIME) {
+            logger::log_warning("A* search timed out after " + std::to_string(MAX_SEARCH_TIME) + " seconds");
+            return {};
+        }
+
+        auto current = open_list.top();
+        open_list.pop();
+
+        if (current->pos == goal) {
+            auto path = reconstruct_path(current);
+            return path;
+        }
+
+        for (const auto& move : Action::MOVEMENTS_4) {
+            Vertex next_pos(current->pos.x + move.x, current->pos.y + move.y);
+
+            // 检查是否在边界内
+            if (next_pos.x < top_left.x || next_pos.x > bottom_right.x || 
+                next_pos.y < top_left.y || next_pos.y > bottom_right.y) {
+                continue;
+            }
+
+            if (!utils::isWalkable(grid, current->pos, next_pos)) {
+                continue;
+            }
+
+            double tentative_g = current->g + 1.0;
+
+            if (closed_list.count(next_pos) && closed_list[next_pos] <= tentative_g) {
+                continue;
+            }
+
+            closed_list[next_pos] = tentative_g;
+
+            auto next_node = std::make_shared<AStarNode>(
+                next_pos, tentative_g, heuristic(next_pos, goal), current);
+            open_list.push(next_node);
+        }
+    }
+
+    return {};
 }
